@@ -38,8 +38,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
 )
 
 const (
@@ -174,7 +172,7 @@ func checkLoopDevice(clusterdContext *cluster.Context) error {
 	if err == nil {
 		if loopDevices, ok := cmTemp.Data[cluster.VgStatusConfigMapKey]; ok {
 
-			nodeStatus := topolvmv1.NodeStorageState{}
+			nodeStatus := topolvmv2.NodeStorageState{}
 			err := json.Unmarshal([]byte(loopDevices), &nodeStatus)
 			if err != nil {
 				logger.Errorf("unmarshal confimap status data failed %+v ", err)
@@ -283,7 +281,7 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 			return nil
 		}
 
-		nodeStatus := &topolvmv1.NodeStorageState{}
+		nodeStatus := &topolvmv2.NodeStorageState{}
 		err = json.Unmarshal([]byte(status), nodeStatus)
 		if err != nil {
 			logger.Errorf("unmarshal node status failed err %v", err)
@@ -300,7 +298,7 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 				if _, ok := pvs[d.Name]; ok {
 					continue
 				} else {
-					nodeStatus.SuccessClasses[index1].DeviceStates[index2].State = topolvmv1.DeviceStateOffline
+					nodeStatus.SuccessClasses[index1].DeviceStates[index2].State = topolvmv2.DeviceStateOffline
 				}
 			}
 		}

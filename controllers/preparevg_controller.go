@@ -318,7 +318,7 @@ func (c *PrePareVg) provisionWithNodeStatus(cm *v1.ConfigMap, vgStatus string, d
 			}
 			err = c.checkVgIfShrink(&dev, sucClassMap)
 			if err != nil {
-				logger.Errorf("checkVgIfShrink vg:%s failed err %v", dev.VgName, err)
+				vgLogger.Errorf("checkVgIfShrink vg:%s failed err %v", dev.VgName, err)
 			}
 			continue
 		}
@@ -393,7 +393,6 @@ func (c *PrePareVg) checkVgIfDelete(sucClass map[string]*topolvmv2.ClassState, f
 
 }
 
-
 func (c *PrePareVg) checkVgIfExpand(class *topolvmv2.DeviceClass, sucClass map[string]*topolvmv2.ClassState) error {
 
 	vgLogger.Info("check vg need expand or not")
@@ -435,7 +434,7 @@ func (c *PrePareVg) checkVgIfExpand(class *topolvmv2.DeviceClass, sucClass map[s
 			return err
 		}
 		for _, d := range newPvs {
-			devStatus := topolvmv1.DeviceState{Name: d, State: topolvmv1.DeviceStateOnline}
+			devStatus := topolvmv2.DeviceState{Name: d, State: topolvmv2.DeviceStateOnline}
 			sucClass[class.VgName].DeviceStates = append(sucClass[class.VgName].DeviceStates, devStatus)
 		}
 
@@ -444,7 +443,7 @@ func (c *PrePareVg) checkVgIfExpand(class *topolvmv2.DeviceClass, sucClass map[s
 	return err
 }
 
-func (c *PrePareVg) checkVgIfShrink(class *topolvmv1.DeviceClass, sucClass map[string]*topolvmv1.ClassState) error {
+func (c *PrePareVg) checkVgIfShrink(class *topolvmv2.DeviceClass, sucClass map[string]*topolvmv2.ClassState) error {
 
 	vgLogger.Info("check vg need shrink or not")
 	pvs, err := sys.GetPhysicalVolume(c.context.Executor, class.VgName)
@@ -567,7 +566,7 @@ func (c *PrePareVg) createVg(availaDisks map[string]*sys.LocalDisk, class *topol
 
 		if _, ok := availaDisks[disk.Name]; !ok {
 			message := "disk may has filesystem or is not raw disk please check"
-			devStatus := topolvmv2.DeviceState{Name: disk.Name, State: topolvmv1.DeviceStateOffline, Message: message}
+			devStatus := topolvmv2.DeviceState{Name: disk.Name, State: topolvmv2.DeviceStateOffline, Message: message}
 			classState.DeviceStates = append(classState.DeviceStates, devStatus)
 			vgLogger.Errorf("device:%s is not available", disk.Name)
 			available = false
@@ -585,7 +584,7 @@ func (c *PrePareVg) createVg(availaDisks map[string]*sys.LocalDisk, class *topol
 			sucClass[class.VgName] = classState
 			vgLogger.Infof("create vg %s retry successful", class.VgName)
 			for _, d := range class.Device {
-				devStatus := topolvmv1.DeviceState{Name: d.Name, State: topolvmv1.DeviceStateOnline}
+				devStatus := topolvmv2.DeviceState{Name: d.Name, State: topolvmv2.DeviceStateOnline}
 				classState.DeviceStates = append(classState.DeviceStates, devStatus)
 			}
 			return true

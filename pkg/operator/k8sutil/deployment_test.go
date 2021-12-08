@@ -18,7 +18,7 @@ package k8sutil
 
 import (
 	"context"
-	"github.com/alauda/topolvm-operator/pkg/cluster"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 	"github.com/stretchr/testify/assert"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,14 +44,14 @@ func makeDeployment(deploymentName string, nameSpace string, image string) *apps
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					cluster.AppAttr: deploymentName,
+					topolvm.AppAttr: deploymentName,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: deploymentName,
 					Labels: map[string]string{
-						cluster.AppAttr: deploymentName,
+						topolvm.AppAttr: deploymentName,
 					},
 				},
 				Spec: corev1.PodSpec{

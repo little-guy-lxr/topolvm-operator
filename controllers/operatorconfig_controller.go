@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"context"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/node"
 
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator/discover"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
-	"github.com/alauda/topolvm-operator/pkg/operator/node"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -31,7 +32,7 @@ var configLogger = capnslog.NewPackageLogger("topolvm/operator", "config-setting
 type ReconcileConfig struct {
 	client           client.Client
 	context          *cluster.Context
-	config           cluster.OperatorConfig
+	config           topolvm.OperatorConfig
 	opManagerContext context.Context
 }
 
@@ -40,7 +41,7 @@ func predicateController(client client.Client) predicate.Funcs {
 	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			if cm, ok := e.Object.(*v1.ConfigMap); ok {
-				return cm.Name == cluster.OperatorSettingConfigMapName
+				return cm.Name == topolvm.OperatorSettingConfigMapName
 			}
 			return false
 		},
@@ -48,7 +49,7 @@ func predicateController(client client.Client) predicate.Funcs {
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if old, ok := e.ObjectOld.(*v1.ConfigMap); ok {
 				if new, ok := e.ObjectNew.(*v1.ConfigMap); ok {
-					if old.Name == cluster.OperatorSettingConfigMapName && new.Name == cluster.OperatorSettingConfigMapName {
+					if old.Name == topolvm.OperatorSettingConfigMapName && new.Name == topolvm.OperatorSettingConfigMapName {
 						// We still want to reconcile the operator manager if the configmap is updated
 						return true
 					}
@@ -60,7 +61,7 @@ func predicateController(client client.Client) predicate.Funcs {
 
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			if cm, ok := e.Object.(*v1.ConfigMap); ok {
-				if cm.Name == cluster.OperatorSettingConfigMapName {
+				if cm.Name == topolvm.OperatorSettingConfigMapName {
 					configLogger.Debug("operator configmap deleted, not reconciling")
 					return false
 				}
@@ -74,7 +75,7 @@ func predicateController(client client.Client) predicate.Funcs {
 	}
 }
 
-func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, config cluster.OperatorConfig) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, config topolvm.OperatorConfig) reconcile.Reconciler {
 	return &ReconcileConfig{
 		client:           mgr.GetClient(),
 		context:          context,
@@ -85,7 +86,7 @@ func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerConte
 
 // Add creates a new Operator configuration Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig cluster.OperatorConfig) error {
+func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig topolvm.OperatorConfig) error {
 	return add(mgr, newReconciler(mgr, context, opManagerContext, opConfig))
 }
 
@@ -156,8 +157,8 @@ func (c *ReconcileConfig) reconcile(request reconcile.Request) (reconcile.Result
 }
 
 func (c *ReconcileConfig) updateCsiDriver() error {
-	kubeletRootDir := k8sutil.GetValue(c.config.Parameters, cluster.KubeletRootPathEnv, cluster.CSIKubeletRootDir)
-	if kubeletRootDir != cluster.CSIKubeletRootDir {
+	kubeletRootDir := k8sutil.GetValue(c.config.Parameters, topolvm.KubeletRootPathEnv, topolvm.CSIKubeletRootDir)
+	if kubeletRootDir != topolvm.CSIKubeletRootDir {
 		if err := node.UpdateNodeDeploymentCSIKubeletRootPath(c.context.Clientset, kubeletRootDir); err != nil {
 			configLogger.Errorf("updater csi kubelet path failed err:%s", err.Error())
 			return err
@@ -167,9 +168,9 @@ func (c *ReconcileConfig) updateCsiDriver() error {
 }
 
 func (c *ReconcileConfig) starDiscoverDaemonset() error {
-	enableDiscoverDevices := k8sutil.GetValue(c.config.Parameters, cluster.DiscoverDevicesEnv, cluster.EnableDiscoverDevices)
+	enableDiscoverDevices := k8sutil.GetValue(c.config.Parameters, topolvm.DiscoverDevicesEnv, topolvm.EnableDiscoverDevices)
 	if enableDiscoverDevices == "true" {
-		if err := discover.MakeDiscoverDevicesDaemonset(c.context.Clientset, cluster.DiscoverAppName, c.config.Image, false); err != nil {
+		if err := discover.MakeDiscoverDevicesDaemonset(c.context.Clientset, topolvm.DiscoverAppName, c.config.Image, false); err != nil {
 			return err
 		}
 	}

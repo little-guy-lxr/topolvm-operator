@@ -20,13 +20,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	topolvmcommon "github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/metric"
 	"os"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
+	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/cmd/topolvm"
 	"github.com/alauda/topolvm-operator/controllers"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
-	"github.com/alauda/topolvm-operator/pkg/metric"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,13 +59,13 @@ func addScheme() {
 	// +kubebuilder:scaffold:scheme
 }
 
-var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, cluster.OperatorConfig) error{
+var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, topolvmcommon.OperatorConfig) error{
 	controllers.Add,
 }
 
 func startOperator(cmd *cobra.Command, args []string) error {
 
-	cluster.SetLogLevel()
+	topolvmcommon.SetLogLevel()
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -97,13 +98,13 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	ctx := cluster.NewContext()
 	ctx.Client = mgr.GetClient()
 
-	cluster.NameSpace = os.Getenv(cluster.PodNameSpaceEnv)
-	if cluster.NameSpace == "" {
-		logger.Errorf("unable get env %s ", cluster.PodNameSpaceEnv)
-		return fmt.Errorf("get env:%s failed ", cluster.PodNameSpaceEnv)
+	topolvmcommon.NameSpace = os.Getenv(topolvmcommon.PodNameSpaceEnv)
+	if topolvmcommon.NameSpace == "" {
+		logger.Errorf("unable get env %s ", topolvmcommon.PodNameSpaceEnv)
+		return fmt.Errorf("get env:%s failed ", topolvmcommon.PodNameSpaceEnv)
 	}
 
-	metricsCh := make(chan *cluster.Metrics)
+	metricsCh := make(chan *topolvmcommon.Metrics)
 	if err := mgr.Add(metric.NewMetricsExporter(metricsCh)); err != nil {
 		return err
 	}
@@ -122,7 +123,7 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	}
 
 	opctx := context.TODO()
-	config := cluster.OperatorConfig{
+	config := topolvmcommon.OperatorConfig{
 		Image: operatorImage,
 	}
 	for _, f := range AddToManagerFuncs {

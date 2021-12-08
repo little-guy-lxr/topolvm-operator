@@ -17,9 +17,10 @@ limitations under the License.
 package discovercmd
 
 import (
+	rawclient "github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/clientset/versioned"
 	"time"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
+	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/cmd/topolvm"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	opediscover "github.com/alauda/topolvm-operator/pkg/operator/discover"
@@ -48,11 +49,15 @@ func init() {
 
 func discover(cmd *cobra.Command, args []string) error {
 	context := cluster.NewContext()
-	err := opediscover.Run(context, discoverDevicesInterval)
+	clientset, err := rawclient.NewForConfig(context.KubeConfig)
+	if err != nil {
+		topolvm.TerminateOnError(err, "create raw device client set failed")
+		return err
+	}
+	context.RawDeviceClientset = clientset
+	err = opediscover.Run(context, discoverDevicesInterval)
 	if err != nil {
 		topolvm.TerminateFatal(err)
 	}
-
 	return nil
-
 }

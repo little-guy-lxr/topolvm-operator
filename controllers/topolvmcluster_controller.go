@@ -19,6 +19,12 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/csidriver"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/monitor"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/psp"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/volumectr"
+	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/volumegroup"
 	"reflect"
 	"strings"
 	"sync"
@@ -35,16 +41,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
+	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator/controller"
-	"github.com/alauda/topolvm-operator/pkg/operator/csidriver"
 	"github.com/alauda/topolvm-operator/pkg/operator/discover"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
-	"github.com/alauda/topolvm-operator/pkg/operator/monitor"
-	"github.com/alauda/topolvm-operator/pkg/operator/psp"
-	"github.com/alauda/topolvm-operator/pkg/operator/volumectr"
-	"github.com/alauda/topolvm-operator/pkg/operator/volumegroup"
 	"github.com/coreos/pkg/capnslog"
 )
 
@@ -82,7 +83,7 @@ type TopolvmClusterReconciler struct {
 	clusterRef          *metav1.OwnerReference
 }
 
-func NewTopolvmClusterReconciler(scheme *runtime.Scheme, context *cluster.Context, operatorImage string, metricUpdater chan *cluster.Metrics) *TopolvmClusterReconciler {
+func NewTopolvmClusterReconciler(scheme *runtime.Scheme, context *cluster.Context, operatorImage string, metricUpdater chan *topolvm.Metrics) *TopolvmClusterReconciler {
 
 	r := &TopolvmClusterReconciler{
 		scheme:            scheme,
@@ -118,8 +119,8 @@ func (r *TopolvmClusterReconciler) updateRef(ref *metav1.OwnerReference) {
 func (r *TopolvmClusterReconciler) reconcile(request reconcile.Request) (reconcile.Result, error) {
 
 	// Pass object name and namespace
-	if request.Namespace != cluster.NameSpace {
-		clusterLogger.Errorf("namespace %s of topovlm cluster:%s is not equal to operator namespace:%s", request.Namespace, request.NamespacedName.Name, cluster.NameSpace)
+	if request.Namespace != topolvm.NameSpace {
+		clusterLogger.Errorf("namespace %s of topovlm cluster:%s is not equal to operator namespace:%s", request.Namespace, request.NamespacedName.Name, topolvm.NameSpace)
 		return reconcile.Result{}, nil
 	}
 
@@ -165,9 +166,9 @@ func (r *TopolvmClusterReconciler) reconcile(request reconcile.Request) (reconci
 	if r.namespacedName == nil {
 		r.namespacedName = &request.NamespacedName
 	}
-	cluster.ClusterName = request.NamespacedName.Name
-	cluster.TopolvmImage = topolvmCluster.Spec.TopolvmVersion
-	cluster.CertsSecret = topolvmCluster.Spec.CertsSecret
+	topolvm.ClusterName = request.NamespacedName.Name
+	topolvm.TopolvmImage = topolvmCluster.Spec.TopolvmVersion
+	topolvm.CertsSecret = topolvmCluster.Spec.CertsSecret
 
 	// Set a finalizer so we can do cleanup before the object goes away
 	err = controller.AddFinalizerIfNotPresent(r.context.Client, topolvmCluster)
@@ -210,7 +211,7 @@ func (r *TopolvmClusterReconciler) reconcile(request reconcile.Request) (reconci
 	}
 	//start configmap controller
 	if r.configMapController == nil {
-		r.configMapController = NewConfigMapController(cluster.NewContext(), cluster.NameSpace, ref, r)
+		r.configMapController = NewConfigMapController(cluster.NewContext(), topolvm.NameSpace, ref, r)
 		r.configMapController.Start()
 	}
 	r.configMapController.UpdateRef(ref)
@@ -304,7 +305,7 @@ func (c *ClusterController) UseAllNodeAndDevices() bool {
 
 func (c *ClusterController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
 
-	if cluster.IsOperatorHub {
+	if topolvm.IsOperatorHub {
 
 		err := csidriver.CheckTopolvmCsiDriverExisting(c.context.Clientset, ref)
 		if err != nil {
@@ -344,9 +345,9 @@ func (c *ClusterController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref 
 func (c *ClusterController) checkUpdateDiscoverDaemonset(topolvmCluster *topolvmv2.TopolvmCluster) error {
 
 	ctx := context.TODO()
-	daemonset, err := c.context.Clientset.AppsV1().DaemonSets(cluster.NameSpace).Get(ctx, cluster.DiscoverAppName, metav1.GetOptions{})
+	daemonset, err := c.context.Clientset.AppsV1().DaemonSets(topolvm.NameSpace).Get(ctx, topolvm.DiscoverAppName, metav1.GetOptions{})
 	if err != nil && !kerrors.IsNotFound(err) {
-		clusterLogger.Errorf("failed to detect daemonset:%s. err:%v", cluster.DiscoverAppName, err)
+		clusterLogger.Errorf("failed to detect daemonset:%s. err:%v", topolvm.DiscoverAppName, err)
 		return errors.Wrap(err, "failed to detect daemonset")
 	} else if err == nil {
 		needUpdate := false
@@ -358,10 +359,10 @@ func (c *ClusterController) checkUpdateDiscoverDaemonset(topolvmCluster *topolvm
 			needUpdate = true
 		}
 		if topolvmCluster.Spec.UseLoop {
-			if _, ok := daemonset.Annotations[cluster.LoopAnnotationsKey]; !ok {
+			if _, ok := daemonset.Annotations[topolvm.LoopAnnotationsKey]; !ok {
 				needUpdate = true
-				daemonset.Annotations[cluster.LoopAnnotationsKey] = cluster.LoopAnnotationsVal
-				daemonset.Spec.Template.Spec.Containers[0].Env = append(daemonset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: cluster.UseLoopEnv, Value: cluster.UseLoop})
+				daemonset.Annotations[topolvm.LoopAnnotationsKey] = topolvm.LoopAnnotationsVal
+				daemonset.Spec.Template.Spec.Containers[0].Env = append(daemonset.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: topolvm.UseLoopEnv, Value: topolvm.UseLoop})
 			}
 		}
 
@@ -377,7 +378,7 @@ func (c *ClusterController) checkUpdateDiscoverDaemonset(topolvmCluster *topolvm
 	}
 
 	if topolvmCluster.Spec.UseLoop {
-		return discover.MakeDiscoverDevicesDaemonset(c.context.Clientset, cluster.DiscoverAppName, c.operatorImage, topolvmCluster.Spec.UseLoop)
+		return discover.MakeDiscoverDevicesDaemonset(c.context.Clientset, topolvm.DiscoverAppName, c.operatorImage, topolvmCluster.Spec.UseLoop)
 	}
 
 	return nil
@@ -387,7 +388,7 @@ func (c *ClusterController) checkUpdateDiscoverDaemonset(topolvmCluster *topolvm
 func (c *ClusterController) startReplaceNodeDeployment(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
 
 	ctx := context.TODO()
-	deploys, err := c.context.Clientset.AppsV1().Deployments(cluster.NameSpace).List(ctx, metav1.ListOptions{})
+	deploys, err := c.context.Clientset.AppsV1().Deployments(topolvm.NameSpace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		clusterLogger.Errorf("list deployment failed err:%v", err)
 		return err
@@ -395,7 +396,7 @@ func (c *ClusterController) startReplaceNodeDeployment(topolvmCluster *topolvmv2
 
 	for i := 0; i < len(deploys.Items); i++ {
 
-		if strings.HasPrefix(deploys.Items[i].ObjectMeta.Name, cluster.TopolvmNodeDeploymentNamePrefix) {
+		if strings.HasPrefix(deploys.Items[i].ObjectMeta.Name, topolvm.TopolvmNodeDeploymentNamePrefix) {
 
 			if deploys.Items[i].Spec.Template.Spec.Containers[0].Image == topolvmCluster.Spec.TopolvmVersion {
 				clusterLogger.Info("node deployment no change need not reconcile")
@@ -405,7 +406,7 @@ func (c *ClusterController) startReplaceNodeDeployment(topolvmCluster *topolvmv2
 			for j := 0; j < len(containers); j++ {
 				containers[j].Image = topolvmCluster.Spec.TopolvmVersion
 			}
-			_, err := c.context.Clientset.AppsV1().Deployments(cluster.NameSpace).Update(ctx, &deploys.Items[i], metav1.UpdateOptions{})
+			_, err := c.context.Clientset.AppsV1().Deployments(topolvm.NameSpace).Update(ctx, &deploys.Items[i], metav1.UpdateOptions{})
 			if err != nil {
 				clusterLogger.Errorf("update deployment:%s image failed err:%v", deploys.Items[i].ObjectMeta.Name, err)
 
@@ -474,9 +475,9 @@ func (c *ClusterController) RestartJob(node string, ref *metav1.OwnerReference) 
 func (c *ClusterController) startTopolvmControllerDeployment(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
 
 	ctx := context.TODO()
-	deployment, err := c.context.Clientset.AppsV1().Deployments(cluster.NameSpace).Get(ctx, cluster.TopolvmControllerDeploymentName, metav1.GetOptions{})
+	deployment, err := c.context.Clientset.AppsV1().Deployments(topolvm.NameSpace).Get(ctx, topolvm.TopolvmControllerDeploymentName, metav1.GetOptions{})
 	if err != nil && !kerrors.IsNotFound(err) {
-		clusterLogger.Errorf("failed to detect deployment:%s. err:%v", cluster.TopolvmControllerDeploymentName, err)
+		clusterLogger.Errorf("failed to detect deployment:%s. err:%v", topolvm.TopolvmControllerDeploymentName, err)
 		return errors.Wrap(err, "failed to detect deployment")
 	} else if err == nil {
 		if deployment.Spec.Template.Spec.Containers[0].Image == topolvmCluster.Spec.TopolvmVersion {
@@ -536,7 +537,7 @@ func RemoveNodeCapacityAnnotations(clientset kubernetes.Interface) error {
 	nodes := nodeList.DeepCopy()
 	for index, n := range nodes.Items {
 		for key := range n.Annotations {
-			if strings.HasPrefix(key, cluster.CapacityKeyPrefix) {
+			if strings.HasPrefix(key, topolvm.CapacityKeyPrefix) {
 
 				delete(nodes.Items[index].Annotations, key)
 				oldJSON, err := json.Marshal(nodeList.Items[index])
@@ -563,32 +564,32 @@ func RemoveNodeCapacityAnnotations(clientset kubernetes.Interface) error {
 
 func checkAndCreatePsp(clientset kubernetes.Interface, ref *metav1.OwnerReference) error {
 
-	existing, err := psp.CheckPspExisting(clientset, cluster.TopolvmNodePsp)
+	existing, err := psp.CheckPspExisting(clientset, topolvm.TopolvmNodePsp)
 	if err != nil {
-		return errors.Wrapf(err, "check psp %s failed", cluster.TopolvmNodePsp)
+		return errors.Wrapf(err, "check psp %s failed", topolvm.TopolvmNodePsp)
 	}
 
 	if !existing {
 		err = psp.CreateTopolvmNodePsp(clientset, ref)
 		if err != nil {
-			return errors.Wrapf(err, "create psp %s failed", cluster.TopolvmNodePsp)
+			return errors.Wrapf(err, "create psp %s failed", topolvm.TopolvmNodePsp)
 		}
 	} else {
-		clusterLogger.Infof("psp %s existing", cluster.TopolvmNodePsp)
+		clusterLogger.Infof("psp %s existing", topolvm.TopolvmNodePsp)
 	}
 
-	existing, err = psp.CheckPspExisting(clientset, cluster.TopolvmPrepareVgPsp)
+	existing, err = psp.CheckPspExisting(clientset, topolvm.TopolvmPrepareVgPsp)
 	if err != nil {
-		return errors.Wrapf(err, "check psp %s failed", cluster.TopolvmPrepareVgPsp)
+		return errors.Wrapf(err, "check psp %s failed", topolvm.TopolvmPrepareVgPsp)
 	}
 
 	if !existing {
 		err = psp.CreateTopolvmPrepareVgPsp(clientset, ref)
 		if err != nil {
-			return errors.Wrapf(err, "create psp %s failed", cluster.TopolvmPrepareVgPsp)
+			return errors.Wrapf(err, "create psp %s failed", topolvm.TopolvmPrepareVgPsp)
 		}
 	} else {
-		clusterLogger.Infof("psp %s existing", cluster.TopolvmPrepareVgPsp)
+		clusterLogger.Infof("psp %s existing", topolvm.TopolvmPrepareVgPsp)
 	}
 
 	return nil

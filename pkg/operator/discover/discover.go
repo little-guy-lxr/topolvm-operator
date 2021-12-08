@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -29,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
+	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/alauda/topolvm-operator/pkg/util/sys"
@@ -104,15 +105,15 @@ func Run(context *cluster.Context, probeInterval time.Duration) error {
 		return fmt.Errorf("nil context")
 	}
 	logger.Debugf("device discovery interval is %q", probeInterval.String())
-	nodeName = os.Getenv(cluster.NodeNameEnv)
-	namespace = os.Getenv(cluster.PodNameSpaceEnv)
-	if os.Getenv(cluster.UseLoopEnv) == cluster.UseLoop {
+	nodeName = os.Getenv(topolvm.NodeNameEnv)
+	namespace = os.Getenv(topolvm.PodNameSpaceEnv)
+	if os.Getenv(topolvm.UseLoopEnv) == topolvm.UseLoop {
 		useLoop = true
 	} else {
 		useLoop = false
 	}
 
-	cmName = k8sutil.TruncateNodeName(cluster.LvmdConfigMapFmt, nodeName)
+	cmName = k8sutil.TruncateNodeName(topolvm.LvmdConfigMapFmt, nodeName)
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM)
 
@@ -170,7 +171,7 @@ func checkLoopDevice(clusterdContext *cluster.Context) error {
 	ctx := context.TODO()
 	cmTemp, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
 	if err == nil {
-		if loopDevices, ok := cmTemp.Data[cluster.VgStatusConfigMapKey]; ok {
+		if loopDevices, ok := cmTemp.Data[topolvm.VgStatusConfigMapKey]; ok {
 
 			nodeStatus := topolvmv2.NodeStorageState{}
 			err := json.Unmarshal([]byte(loopDevices), &nodeStatus)
@@ -181,7 +182,7 @@ func checkLoopDevice(clusterdContext *cluster.Context) error {
 
 			failed := false
 			for _, ele := range nodeStatus.Loops {
-				if ele.Status == cluster.LoopCreateSuccessful {
+				if ele.Status == topolvm.LoopCreateSuccessful {
 
 					err := sys.ReSetupLoop(clusterdContext.Executor, ele.File, ele.DeviceName)
 					if err != nil {
@@ -225,11 +226,11 @@ func updateDeviceCM(clusterdContext *cluster.Context) error {
 	deviceStr := string(deviceJSON)
 	cm, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
 	if err == nil {
-		lastDevice := cm.Data[cluster.LocalDiskCMData]
+		lastDevice := cm.Data[topolvm.LocalDiskCMData]
 		logger.Debugf("last devices %s", lastDevice)
 		if lastDevice != deviceStr {
 			newcm := cm.DeepCopy()
-			newcm.Data[cluster.LocalDiskCMData] = deviceStr
+			newcm.Data[topolvm.LocalDiskCMData] = deviceStr
 			err = k8sutil.PatchConfigMap(clusterdContext.Clientset, newcm.Namespace, cm, newcm)
 			if err != nil {
 				logger.Errorf("failed to update configmap %s: %v", cmName, err)
@@ -243,17 +244,17 @@ func updateDeviceCM(clusterdContext *cluster.Context) error {
 		}
 
 		data := make(map[string]string, 1)
-		data[cluster.LocalDiskCMData] = deviceStr
+		data[topolvm.LocalDiskCMData] = deviceStr
 
 		// the map doesn't exist yet, create it now
 		annotations := make(map[string]string)
-		annotations[cluster.LvmdAnnotationsNodeKey] = nodeName
+		annotations[topolvm.LvmdAnnotationsNodeKey] = nodeName
 		cm = &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cmName,
 				Namespace: namespace,
 				Labels: map[string]string{
-					cluster.LvmdConfigMapLabelKey: cluster.LvmdConfigMapLabelValue,
+					topolvm.LvmdConfigMapLabelKey: topolvm.LvmdConfigMapLabelValue,
 				},
 				Annotations: annotations,
 			},
@@ -276,7 +277,7 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 	cm, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
 	if err == nil {
 		newcm := cm.DeepCopy()
-		status := newcm.Data[cluster.VgStatusConfigMapKey]
+		status := newcm.Data[topolvm.VgStatusConfigMapKey]
 		if status == "" {
 			return nil
 		}
@@ -314,7 +315,7 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 			logger.Errorf("marshal node status failed %v", err)
 			return err
 		}
-		newcm.Data[cluster.VgStatusConfigMapKey] = string(res)
+		newcm.Data[topolvm.VgStatusConfigMapKey] = string(res)
 		err = k8sutil.PatchConfigMap(clusterdContext.Clientset, newcm.Namespace, cm, newcm)
 		if err != nil {
 			logger.Errorf("failed to update configmap %s: %v", cmName, err)

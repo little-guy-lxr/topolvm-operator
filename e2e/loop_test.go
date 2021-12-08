@@ -3,9 +3,9 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
-	"github.com/alauda/topolvm-operator/pkg/cluster"
+	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -92,7 +92,7 @@ spec:
 		Eventually(func() error {
 
 			By("check lvmd configmap count")
-			result, stderr, err := kubectl("get", "-n=topolvm-system", "configmap", fmt.Sprintf("--selector=%s=%s", cluster.LvmdConfigMapLabelKey, cluster.LvmdConfigMapLabelValue), "-o=json")
+			result, stderr, err := kubectl("get", "-n=topolvm-system", "configmap", fmt.Sprintf("--selector=%s=%s", topolvm.LvmdConfigMapLabelKey, topolvm.LvmdConfigMapLabelValue), "-o=json")
 			if err != nil {
 				return fmt.Errorf("%v: stdout=%s, stderr=%s", err, result, stderr)
 			}
@@ -103,9 +103,9 @@ spec:
 			}
 			if len(cmList.Items) != 4 {
 				for _, ele := range cmList.Items {
-					fmt.Printf("%s: %s \n", cluster.LvmdConfigMapKey, ele.Data[cluster.LvmdConfigMapKey])
-					fmt.Printf("%s: %s \n", cluster.VgStatusConfigMapKey, ele.Data[cluster.VgStatusConfigMapKey])
-					fmt.Printf("%s: %s \n", cluster.LocalDiskCMData, ele.Data[cluster.LocalDiskCMData])
+					fmt.Printf("%s: %s \n", topolvm.LvmdConfigMapKey, ele.Data[topolvm.LvmdConfigMapKey])
+					fmt.Printf("%s: %s \n", topolvm.VgStatusConfigMapKey, ele.Data[topolvm.VgStatusConfigMapKey])
+					fmt.Printf("%s: %s \n", topolvm.LocalDiskCMData, ele.Data[topolvm.LocalDiskCMData])
 					result, stderr, err := execAtLocal("losetup", nil, "-a")
 					if err != nil {
 						return fmt.Errorf("%v: stdout=%s, stderr=%s", err, result, stderr)
@@ -117,16 +117,16 @@ spec:
 
 			By("checking lvmd classname")
 			for _, cm := range cmList.Items {
-				if cm.GetAnnotations()[cluster.LvmdAnnotationsNodeKey] == "topolvm-e2e-control-plane" {
+				if cm.GetAnnotations()[topolvm.LvmdAnnotationsNodeKey] == "topolvm-e2e-control-plane" {
 					continue
 				}
 				nodeStatus := &topolvmv2.NodeStorageState{}
-				err = json.Unmarshal([]byte(cm.Data[cluster.VgStatusConfigMapKey]), nodeStatus)
+				err = json.Unmarshal([]byte(cm.Data[topolvm.VgStatusConfigMapKey]), nodeStatus)
 				if err != nil {
 					return err
 				}
 				for _, ele := range nodeStatus.Loops {
-					if ele.Status != cluster.LoopCreateSuccessful {
+					if ele.Status != topolvm.LoopCreateSuccessful {
 						return fmt.Errorf("loop %s create failed", ele.Name)
 					}
 				}

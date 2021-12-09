@@ -14,6 +14,12 @@ import (
 	"strconv"
 )
 
+var (
+	DefaultRawDevicePluginImage = "quay.io/cephcsi/cephcsi:v3.4.0"
+	DefaultRegistrarImage       = "k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0"
+	DefaultProvisionerImage     = "k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0"
+)
+
 const (
 	KubeMinMajor                     = "1"
 	kubeMinMinor                     = "21"
@@ -47,10 +53,6 @@ var (
 )
 
 var (
-	// image names
-	DefaultRegistrarImage   = "k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0"
-	DefaultProvisionerImage = "k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0"
-
 	// Local package template path for RBD
 	//go:embed template/csi-rawdevice-plugin.yaml
 	CSIRawDeviceNodeTemplatePath string
@@ -192,8 +194,46 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	}
 
 	if rawDeivceCSIDriver != nil {
-		// create csi driver
+		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeivceCSIDriver)
+		if err != nil {
+			return errors.Wrapf(err, "failed to start rbd provisioner deployment %q", rawDeviceProvisioner.Name)
+		}
 	}
 
 	return nil
+}
+
+func (r *CSIRawDeviceController) stopDrivers(ver *version.Info) {
+	if !EnableRawDevice {
+		logger.Info("CSI Ceph RBD driver disabled")
+		succeeded := r.deleteCSIDriverResources(ver, csiRawDevicePlugin, csiRawDeviceProvisioner, "rawdevice.nativestor.io")
+		if succeeded {
+			logger.Info("successfully removed CSI Ceph RBD driver")
+		} else {
+			logger.Error("failed to remove CSI Ceph RBD driver")
+		}
+	}
+}
+
+func (r *CSIRawDeviceController) deleteCSIDriverResources(ver *version.Info, daemonset, deployment, driverName string) bool {
+	succeeded := true
+
+	err := k8sutil.DeleteDaemonset(r.opManagerContext, r.context.Clientset, r.opConfig.OperatorNamespace, daemonset)
+	if err != nil {
+		logger.Errorf("failed to delete the %q. %v", daemonset, err)
+		succeeded = false
+	}
+
+	err = k8sutil.DeleteDeployment(r.opManagerContext, r.context.Clientset, r.opConfig.OperatorNamespace, deployment)
+	if err != nil {
+		logger.Errorf("failed to delete the %q. %v", deployment, err)
+		succeeded = false
+	}
+
+	err = k8sutil.DeleteCSIDriver(r.opManagerContext, r.context.Clientset, driverName)
+	if err != nil {
+		logger.Errorf("failed to delete the %q. %v", driverName, err)
+		succeeded = false
+	}
+	return succeeded
 }

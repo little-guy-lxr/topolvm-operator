@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator"
 	controller2 "github.com/alauda/topolvm-operator/pkg/operator/controller"
 	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/node"
 
@@ -33,7 +34,7 @@ var configLogger = capnslog.NewPackageLogger("topolvm/operator", "config-setting
 type ReconcileConfig struct {
 	client           client.Client
 	context          *cluster.Context
-	config           topolvm.OperatorConfig
+	config           operator.OperatorConfig
 	opManagerContext context.Context
 }
 
@@ -76,7 +77,7 @@ func predicateController(client client.Client) predicate.Funcs {
 	}
 }
 
-func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, config topolvm.OperatorConfig) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, config operator.OperatorConfig) reconcile.Reconciler {
 	return &ReconcileConfig{
 		client:           mgr.GetClient(),
 		context:          context,
@@ -87,7 +88,7 @@ func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerConte
 
 // Add creates a new Operator configuration Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig topolvm.OperatorConfig) error {
+func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig operator.OperatorConfig) error {
 	return add(mgr, newReconciler(mgr, context, opManagerContext, opConfig))
 }
 

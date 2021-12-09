@@ -111,7 +111,7 @@ func TestDeleteDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = DeleteDeployment(k8s, nameSpace, deploymentName)
+	err = DeleteDeployment(ctx, k8s, nameSpace, deploymentName)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,7 +51,7 @@ func CreateReplaceDeployment(clientset kubernetes.Interface, deploymentName stri
 	if err != nil && !kerrors.IsNotFound(err) {
 		return errors.Wrapf(err, "failed to detect deployment %s", deploymentName)
 	} else if err == nil {
-		err := k8sutil.DeleteDeployment(clientset, topolvm.NameSpace, deploymentName)
+		err := k8sutil.DeleteDeployment(context.TODO(), clientset, topolvm.NameSpace, deploymentName)
 		if err != nil {
 			return errors.Wrapf(err, "failed to remove deployment %s ", deploymentName)
 		}

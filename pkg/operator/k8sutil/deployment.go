@@ -39,8 +39,7 @@ func CreateDeployment(ctx context.Context, clientset kubernetes.Interface, dep *
 }
 
 // DeleteDeployment makes a best effort at deleting a deployment and its pods, then waits for them to be deleted
-func DeleteDeployment(clientset kubernetes.Interface, namespace, name string) error {
-	ctx := context.TODO()
+func DeleteDeployment(ctx context.Context, clientset kubernetes.Interface, namespace, name string) error {
 	logger.Debugf("removing %s deployment if it exists", name)
 	deleteAction := func(options *metav1.DeleteOptions) error {
 		return clientset.AppsV1().Deployments(namespace).Delete(ctx, name, *options)
@@ -107,4 +106,31 @@ func CreateOrUpdateDeployment(ctx context.Context, clientset kubernetes.Interfac
 		}
 	}
 	return newDep, nil
+}
+
+// GetDeploymentOwnerReference returns an OwnerReference to the deployment that is running the given pod name
+func GetDeploymentOwnerReference(ctx context.Context, clientset kubernetes.Interface, podName, namespace string) (*metav1.OwnerReference, error) {
+	var deploymentRef *metav1.OwnerReference
+	pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not find pod %q in namespace %q to find deployment owner reference", podName, namespace)
+	}
+	for _, podOwner := range pod.OwnerReferences {
+		if podOwner.Kind == "ReplicaSet" {
+			replicaset, err := clientset.AppsV1().ReplicaSets(namespace).Get(ctx, podOwner.Name, metav1.GetOptions{})
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not find replicaset %q in namespace %q to find deployment owner reference", podOwner.Name, namespace)
+			}
+			for _, replicasetOwner := range replicaset.OwnerReferences {
+				if replicasetOwner.Kind == "Deployment" {
+					localreplicasetOwner := replicasetOwner
+					deploymentRef = &localreplicasetOwner
+				}
+			}
+		}
+	}
+	if deploymentRef == nil {
+		return nil, errors.New("could not find owner reference for rook-ceph deployment")
+	}
+	return deploymentRef, nil
 }

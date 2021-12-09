@@ -44,7 +44,7 @@ func CreateReplaceTopolvmControllerDeployment(clientset kubernetes.Interface, re
 		return err
 	} else if err == nil {
 
-		err := k8sutil.DeleteDeployment(clientset, topolvm.NameSpace, deploymentName)
+		err := k8sutil.DeleteDeployment(context.TODO(), clientset, topolvm.NameSpace, deploymentName)
 		if err != nil {
 			logger.Errorf("failed to remove deployment:%s. err:%v", deploymentName, err)
 			return err

@@ -1,6 +1,7 @@
 package csi
 
 type Param struct {
+	RawDevicePluginImage         string
 	RegistrarImage               string
 	ProvisionerImage             string
 	AttacherImage                string

@@ -6,18 +6,22 @@ import (
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	controllerutil "github.com/alauda/topolvm-operator/pkg/operator/controller"
+	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/version"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"strconv"
 )
 
 const (
@@ -79,8 +83,71 @@ func (r *CSIRawDeviceController) reconcile(request reconcile.Request) (reconcile
 		r.opConfig.Parameters = opConfig.Data
 	}
 
+	ownerRef, err := k8sutil.GetDeploymentOwnerReference(r.opManagerContext, r.context.Clientset, os.Getenv(k8sutil.PodNameEnvVar), r.opConfig.OperatorNamespace)
+	if err != nil {
+		logger.Warningf("could not find deployment owner reference to assign to csi drivers. %v", err)
+	}
+	if ownerRef != nil {
+		blockOwnerDeletion := false
+		ownerRef.BlockOwnerDeletion = &blockOwnerDeletion
+	}
+
+	ownerInfo := k8sutil.NewOwnerInfoWithOwnerRef(ownerRef, r.opConfig.OperatorNamespace)
+
+	serverVersion, err := r.context.Clientset.Discovery().ServerVersion()
+	if err != nil {
+		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed to get server version")
+	}
+
+	err = r.validateAndConfigureDrivers(serverVersion, ownerInfo)
+	if err != nil {
+		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed configure ceph csi")
+	}
 	return reconcile.Result{}, nil
 
+}
+
+func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *version.Info, ownerInfo *k8sutil.OwnerInfo) error {
+	var (
+		err error
+	)
+
+	if err = r.setParams(); err != nil {
+		return errors.Wrapf(err, "failed to configure CSI parameters")
+	}
+
+	if err = validateCSIParam(); err != nil {
+		return errors.Wrapf(err, "failed to validate CSI parameters")
+	}
+
+	if EnableRawDevice {
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			if err = r.startDrivers(serverVersion, ownerInfo); err != nil {
+				logger.Errorf("failed to start Ceph csi drivers, will retry starting csi drivers %d more times. %v", maxRetries-i-1, err)
+			} else {
+				break
+			}
+		}
+		return errors.Wrap(err, "failed to start ceph csi drivers")
+	}
+
+	// Check whether RBD or CephFS needs to be disabled
+	r.stopDrivers(serverVersion)
+
+	return nil
+}
+
+func (r *CSIRawDeviceController) setParams() error {
+	var err error
+
+	if EnableRawDevice, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "OPERATOR_CSI_ENABLE_RAW_DEVICE", "false")); err != nil {
+		return errors.Wrap(err, "unable to parse value for 'ROOK_CSI_ENABLE_RBD'")
+	}
+	CSIParam.RawDevicePluginImage = k8sutil.GetValue(r.opConfig.Parameters, "ROOK_CSI_CEPH_IMAGE", DefaultRawDevicePluginImage)
+	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "ROOK_CSI_REGISTRAR_IMAGE", DefaultRegistrarImage)
+	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "ROOK_CSI_PROVISIONER_IMAGE", DefaultProvisionerImage)
+	return nil
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -105,5 +172,18 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	return nil
+}
+
+func validateCSIParam() error {
+	if len(CSIParam.RawDevicePluginImage) == 0 {
+		return errors.New("missing csi raw device plugin image")
+	}
+	if len(CSIParam.RegistrarImage) == 0 {
+		return errors.New("missing csi registrar image")
+	}
+	if len(CSIParam.ProvisionerImage) == 0 {
+		return errors.New("missing csi provisioner image")
+	}
 	return nil
 }

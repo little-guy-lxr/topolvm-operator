@@ -21,6 +21,8 @@ import (
 	"flag"
 	"fmt"
 	topolvmcommon "github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator"
+	"github.com/alauda/topolvm-operator/pkg/operator/raw_device/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/metric"
 	"os"
 
@@ -59,8 +61,9 @@ func addScheme() {
 	// +kubebuilder:scaffold:scheme
 }
 
-var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, topolvmcommon.OperatorConfig) error{
+var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, operator.OperatorConfig) error{
 	controllers.Add,
+	csi.Add,
 }
 
 func startOperator(cmd *cobra.Command, args []string) error {
@@ -123,8 +126,9 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	}
 
 	opctx := context.TODO()
-	config := topolvmcommon.OperatorConfig{
-		Image: operatorImage,
+	config := operator.OperatorConfig{
+		Image:            operatorImage,
+		NamespaceToWatch: topolvmcommon.NameSpace,
 	}
 	for _, f := range AddToManagerFuncs {
 		if err := f(mgr, ctx, opctx, config); err != nil {

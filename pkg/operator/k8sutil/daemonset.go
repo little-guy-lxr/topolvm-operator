@@ -41,8 +41,7 @@ func CreateDaemonSet(ctx context.Context, name, namespace string, clientset kube
 }
 
 // DeleteDaemonset makes a best effort at deleting a daemonset and its pods, then waits for them to be deleted
-func DeleteDaemonset(clientset kubernetes.Interface, namespace, name string) error {
-	ctx := context.TODO()
+func DeleteDaemonset(ctx context.Context, clientset kubernetes.Interface, namespace, name string) error {
 	deleteAction := func(options *metav1.DeleteOptions) error {
 		return clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, *options)
 	}

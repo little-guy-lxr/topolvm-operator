@@ -19,25 +19,23 @@ package k8sutil
 import (
 	"context"
 	"fmt"
-	apps "k8s.io/api/apps/v1"
+	"github.com/banzaicloud/k8s-objectmatcher/patch"
+	"github.com/pkg/errors"
+	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"time"
 )
 
-func CreateDeployment(clientset kubernetes.Interface, name, namespace string, dep *apps.Deployment) error {
-	ctx := context.Background()
-	_, err := clientset.AppsV1().Deployments(namespace).Create(ctx, dep, metav1.CreateOptions{})
+func CreateDeployment(ctx context.Context, clientset kubernetes.Interface, dep *appsv1.Deployment) (*appsv1.Deployment, error) {
+	// Set hash annotation to the newly generated deployment
+	err := patch.DefaultAnnotator.SetLastAppliedAnnotation(dep)
 	if err != nil {
-		if k8serrors.IsAlreadyExists(err) {
-			_, err = clientset.AppsV1().Deployments(namespace).Update(ctx, dep, metav1.UpdateOptions{})
-		}
-		if err != nil {
-			return fmt.Errorf("failed to start %s deployment: %+v\n%+v", name, err, dep)
-		}
+		return nil, errors.Wrapf(err, "failed to set hash annotation on deployment %q", dep.Name)
 	}
-	return err
+
+	return clientset.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 }
 
 // DeleteDeployment makes a best effort at deleting a deployment and its pods, then waits for them to be deleted
@@ -95,4 +93,18 @@ func deleteResourceAndWait(namespace, name, resourceType string,
 	}
 
 	return fmt.Errorf("gave up waiting for %s pods to be terminated", name)
+}
+
+func CreateOrUpdateDeployment(ctx context.Context, clientset kubernetes.Interface, dep *appsv1.Deployment) (*appsv1.Deployment, error) {
+	newDep, err := CreateDeployment(ctx, clientset, dep)
+	if err != nil {
+		if k8serrors.IsAlreadyExists(err) {
+			// annotation was added in CreateDeployment to dep passed by reference
+			newDep, err = clientset.AppsV1().Deployments(dep.Namespace).Update(ctx, dep, metav1.UpdateOptions{})
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to create or update deployment %q: %+v", dep.Name, dep)
+		}
+	}
+	return newDep, nil
 }

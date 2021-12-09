@@ -62,7 +62,7 @@ func CreateReplaceDeployment(clientset kubernetes.Interface, deploymentName stri
 func CreateNodeDeployment(clientset kubernetes.Interface, deploymentName string, lvmdOConfigMapName string, nodeName string, ref *metav1.OwnerReference) error {
 
 	deployment := getDeployment(deploymentName, nodeName, lvmdOConfigMapName, ref)
-	if err := k8sutil.CreateDeployment(clientset, deploymentName, topolvm.NameSpace, deployment); err != nil {
+	if _, err := k8sutil.CreateDeployment(context.TODO(), clientset, deployment); err != nil {
 		return errors.Wrapf(err, "create node deployment %s failed", deploymentName)
 	}
 	return nil

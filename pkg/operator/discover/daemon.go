@@ -17,6 +17,7 @@ limitations under the License.
 package discover
 
 import (
+	"context"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/pkg/errors"
@@ -37,7 +38,7 @@ func MakeDiscoverDevicesDaemonset(clientset kubernetes.Interface, appName string
 	} else {
 		k8sutil.SetOwnerRefsWithoutBlockOwner(&daemon.ObjectMeta, operatorPod.OwnerReferences)
 	}
-	if err := k8sutil.CreateDaemonSet(appName, topolvm.NameSpace, clientset, daemon); err != nil {
+	if err := k8sutil.CreateDaemonSet(context.TODO(), appName, topolvm.NameSpace, clientset, daemon); err != nil {
 		return errors.Wrapf(err, "create daemonset  %s failed", appName)
 	}
 	return nil

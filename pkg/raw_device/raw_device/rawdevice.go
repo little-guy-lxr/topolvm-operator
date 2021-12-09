@@ -1,15 +1,15 @@
 package main
 
 import (
-	controller "github.com/alauda/topolvm-operator/pkg/operator/raw_device/controller/cmd"
-	node "github.com/alauda/topolvm-operator/pkg/operator/raw_device/node/cmd"
+	controller "github.com/alauda/topolvm-operator/pkg/raw_device/controller/cmd"
+	node "github.com/alauda/topolvm-operator/pkg/raw_device/node/cmd"
 	"io"
 	"os"
 	"path/filepath"
 )
 
 func usage() {
-	io.WriteString(os.Stderr, `Usage: localstor COMMAND [ARGS ...]
+	io.WriteString(os.Stderr, `Usage: rawdevice COMMAND [ARGS ...]
 
 COMMAND:
     raw-device-controller:  raw-device CSI controller service.
@@ -19,7 +19,7 @@ COMMAND:
 
 func main() {
 	name := filepath.Base(os.Args[0])
-	if name == "localstor" {
+	if name == "rawdevice" {
 		if len(os.Args) == 1 {
 			usage()
 			os.Exit(1)

@@ -72,7 +72,7 @@ func TestCreateDeployment(t *testing.T) {
 
 	dep := makeDeployment(deploymentName, nameSpace, image)
 
-	err := CreateDeployment(k8s, deploymentName, nameSpace, dep)
+	_, err := CreateDeployment(context.TODO(), k8s, dep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCreateDeployment(t *testing.T) {
 	}
 
 	dep.Spec.Template.Spec.Containers[0].Image = "new-image"
-	err = CreateDeployment(k8s, deploymentName, nameSpace, dep)
+	_, err = CreateDeployment(context.TODO(), k8s, dep)
 	if err != nil {
 		t.Fatal(err)
 	}

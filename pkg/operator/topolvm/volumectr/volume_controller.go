@@ -61,7 +61,7 @@ func CreateControllerDeployment(clientset kubernetes.Interface, ref *metav1.Owne
 		return err
 	}
 
-	if err := k8sutil.CreateDeployment(clientset, topolvm.TopolvmControllerDeploymentName, topolvm.NameSpace, deployment); err != nil {
+	if _, err := k8sutil.CreateDeployment(context.TODO(), clientset, deployment); err != nil {
 		logger.Errorf("create node deployment %s failed err %s", topolvm.TopolvmControllerDeploymentName, err)
 		return err
 	}

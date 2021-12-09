@@ -75,7 +75,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) \
 		crd:crdVersions=v1 \
 		rbac:roleName=topolvm-global \
-		paths="./api/...;./controllers" \
+		paths="./apis/...;./controllers" \
 		output:crd:artifacts:config=config/crd/bases
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

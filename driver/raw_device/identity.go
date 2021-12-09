@@ -3,7 +3,7 @@ package raw_device
 import (
 	"context"
 	"github.com/alauda/topolvm-operator/csi"
-	"github.com/alauda/topolvm-operator/pkg/operator/raw_device"
+	raw_device2 "github.com/alauda/topolvm-operator/pkg/raw_device"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -27,8 +27,8 @@ type identityService struct {
 func (s identityService) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	idLogger.Info("GetPluginInfo", "req", req.String())
 	return &csi.GetPluginInfoResponse{
-		Name:          raw_device.PluginName,
-		VendorVersion: raw_device.Version,
+		Name:          raw_device2.PluginName,
+		VendorVersion: raw_device2.Version,
 	}, nil
 }
 

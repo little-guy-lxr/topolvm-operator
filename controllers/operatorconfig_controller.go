@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	controller2 "github.com/alauda/topolvm-operator/pkg/operator/controller"
 	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/node"
 
 	"github.com/alauda/topolvm-operator/pkg/cluster"
@@ -132,7 +133,7 @@ func (c *ReconcileConfig) reconcile(request reconcile.Request) (reconcile.Result
 			configLogger.Debug("operator's configmap resource not found. will use default value or env var.")
 		} else {
 			// Error reading the object - requeue the request.
-			return ImmediateRetryResult, errors.Wrap(err, "failed to get operator's configmap")
+			return controller2.ImmediateRetryResult, errors.Wrap(err, "failed to get operator's configmap")
 		}
 	} else {
 		// Populate the operator's config
@@ -142,12 +143,12 @@ func (c *ReconcileConfig) reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile discovery daemon
 	err = c.updateCsiDriver()
 	if err != nil {
-		return ImmediateRetryResult, err
+		return controller2.ImmediateRetryResult, err
 	}
 
 	err = c.starDiscoverDaemonset()
 	if err != nil {
-		return ImmediateRetryResult, err
+		return controller2.ImmediateRetryResult, err
 	}
 	// Reconcile webhook secret
 	// This is done in the predicate function

@@ -82,10 +82,17 @@ func startOperator(cmd *cobra.Command, args []string) error {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	topolvmcommon.NameSpace = os.Getenv(topolvmcommon.PodNameSpaceEnv)
+	if topolvmcommon.NameSpace == "" {
+		logger.Errorf("unable get env %s ", topolvmcommon.PodNameSpaceEnv)
+		return fmt.Errorf("get env:%s failed ", topolvmcommon.PodNameSpaceEnv)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
+		Namespace:              topolvmcommon.NameSpace,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "c6b32c27.cybozu.com",
@@ -97,13 +104,6 @@ func startOperator(cmd *cobra.Command, args []string) error {
 
 	ctx := cluster.NewContext()
 	ctx.Client = mgr.GetClient()
-
-	topolvmcommon.NameSpace = os.Getenv(topolvmcommon.PodNameSpaceEnv)
-	if topolvmcommon.NameSpace == "" {
-		logger.Errorf("unable get env %s ", topolvmcommon.PodNameSpaceEnv)
-		return fmt.Errorf("get env:%s failed ", topolvmcommon.PodNameSpaceEnv)
-	}
-
 	metricsCh := make(chan *topolvmcommon.Metrics)
 	if err := mgr.Add(metric.NewMetricsExporter(metricsCh)); err != nil {
 		return err

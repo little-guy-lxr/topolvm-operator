@@ -8,7 +8,7 @@ import (
 	"github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/clientset/versioned"
 	"github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/informers/externalversions"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
-	"github.com/alauda/topolvm-operator/pkg/operator/raw_device/runner"
+	"github.com/alauda/topolvm-operator/pkg/raw_device/runner"
 	"github.com/kubernetes-csi/csi-lib-utils/leaderelection"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/runtime"

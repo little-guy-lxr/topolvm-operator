@@ -8,7 +8,7 @@ import (
 	"github.com/alauda/topolvm-operator/csi"
 	lister "github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/listers/rawdevice/v1"
 	clientctx "github.com/alauda/topolvm-operator/pkg/cluster"
-	"github.com/alauda/topolvm-operator/pkg/operator/raw_device"
+	"github.com/alauda/topolvm-operator/pkg/raw_device"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"

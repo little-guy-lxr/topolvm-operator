@@ -27,8 +27,7 @@ import (
 )
 
 // CreateDaemonSet creates
-func CreateDaemonSet(name, namespace string, clientset kubernetes.Interface, ds *apps.DaemonSet) error {
-	ctx := context.TODO()
+func CreateDaemonSet(ctx context.Context, name, namespace string, clientset kubernetes.Interface, ds *apps.DaemonSet) error {
 	_, err := clientset.AppsV1().DaemonSets(namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil {
 		if k8serrors.IsAlreadyExists(err) {

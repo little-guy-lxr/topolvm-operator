@@ -15,7 +15,7 @@ spec:
         app.kubernetes.io/name: raw-device-plugin
     spec:
       containers:
-        - name: raw-device-node
+        - name: csi-raw-device-plugin
           command:
             - /raw-device-node
           env:
@@ -24,7 +24,7 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: {{ .CSIRawDeviceNodeImage }}
+          image: {{ .RawDeviceImage }}
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -61,11 +61,11 @@ spec:
               name: node-plugin-dir
             - mountPath: /registration
               name: registration-dir
-        - name: liveness-probe
+        - name: liveness-prometheus
           command:
             - /livenessprobe
             - --csi-address=/run/raw-device/csi-rawdevice.sock
-          image: {{ .CSIPluginImage }}
+          image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent
           resources: {}
           terminationMessagePath: /dev/termination-log

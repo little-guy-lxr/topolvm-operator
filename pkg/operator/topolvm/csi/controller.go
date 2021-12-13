@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	controllerName = "raw-device-csi-controller"
+	controllerName = "topolvm-csi-controller"
 )
 
 var (
-	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "raw-device-csi")
+	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "topolvm-csi")
 )
 
 // Add creates a new Ceph CSI Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -40,7 +40,7 @@ func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig operator.OperatorConfig) reconcile.Reconciler {
-	return &CSIRawDeviceController{
+	return &CSITopolvmController{
 		client:           mgr.GetClient(),
 		context:          context,
 		opConfig:         opConfig,
@@ -48,14 +48,14 @@ func newReconciler(mgr manager.Manager, context *cluster.Context, opManagerConte
 	}
 }
 
-type CSIRawDeviceController struct {
+type CSITopolvmController struct {
 	client           client.Client
 	context          *cluster.Context
 	opManagerContext context.Context
 	opConfig         operator.OperatorConfig
 }
 
-func (r *CSIRawDeviceController) Reconcile(context context.Context, request reconcile.Request) (reconcile.Result, error) {
+func (r *CSITopolvmController) Reconcile(context context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// workaround because the rook logging mechanism is not compatible with the controller-runtime logging interface
 	reconcileResponse, err := r.reconcile(request)
 	if err != nil {
@@ -65,7 +65,7 @@ func (r *CSIRawDeviceController) Reconcile(context context.Context, request reco
 	return reconcileResponse, err
 }
 
-func (r *CSIRawDeviceController) reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *CSITopolvmController) reconcile(request reconcile.Request) (reconcile.Result, error) {
 
 	opNamespaceName := types.NamespacedName{Name: operator.OperatorSettingConfigMapName, Namespace: r.opConfig.OperatorNamespace}
 	opConfig := &v1.ConfigMap{}
@@ -107,7 +107,7 @@ func (r *CSIRawDeviceController) reconcile(request reconcile.Request) (reconcile
 
 }
 
-func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *version.Info, ownerInfo *k8sutil.OwnerInfo) error {
+func (r *CSITopolvmController) validateAndConfigureDrivers(serverVersion *version.Info, ownerInfo *k8sutil.OwnerInfo) error {
 	var (
 		err error
 	)
@@ -120,7 +120,7 @@ func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *vers
 		return errors.Wrapf(err, "failed to validate CSI parameters")
 	}
 
-	if EnableRawDevice {
+	if EnableTopolvm {
 		maxRetries := 3
 		for i := 0; i < maxRetries; i++ {
 			if err = r.startDrivers(serverVersion, ownerInfo); err != nil {
@@ -138,17 +138,13 @@ func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *vers
 	return nil
 }
 
-func (r *CSIRawDeviceController) setParams() error {
+func (r *CSITopolvmController) setParams() error {
 	var err error
 
-	if EnableRawDevice, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "ENABLE_RAW_DEVICE", "false")); err != nil {
-		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_ENABLE_RAW_DEVICE'")
+	if EnableTopolvm, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "ENABLE_TOPOLVM", "false")); err != nil {
+		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_ENABLE_TOPOLVM'")
 	}
-
-	CSIParam.RawDeviceImage = k8sutil.GetValue(r.opConfig.Parameters, "RAW_DEVICE_IMAGE", DefaultRawDevicePluginImage)
-	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", DefaultRegistrarImage)
-	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_IMAGE", DefaultProvisionerImage)
-
+	CSIParam.TopolvmImage = k8sutil.GetValue(r.opConfig.Parameters, "TOPOLVM_PLUGIN_IMAGE", DefaultTopolvmImage)
 	return nil
 }
 
@@ -178,14 +174,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 }
 
 func validateCSIParam() error {
-	if len(CSIParam.RawDeviceImage) == 0 {
+	if len(CSIParam.TopolvmImage) == 0 {
 		return errors.New("missing csi raw device plugin image")
-	}
-	if len(CSIParam.RegistrarImage) == 0 {
-		return errors.New("missing csi registrar image")
-	}
-	if len(CSIParam.ProvisionerImage) == 0 {
-		return errors.New("missing csi provisioner image")
 	}
 	return nil
 }

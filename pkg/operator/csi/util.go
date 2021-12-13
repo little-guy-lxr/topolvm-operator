@@ -23,7 +23,7 @@ import (
 	"strings"
 	"text/template"
 
-	k8sutil "github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
+	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/pkg/errors"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

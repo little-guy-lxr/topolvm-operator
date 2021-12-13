@@ -22,46 +22,50 @@ import (
 var logger = capnslog.NewPackageLogger("topolvm/operator", "status")
 
 type ClusterStatusChecker struct {
+	ctx        context.Context
 	context    *cluster.Context
 	interval   time.Duration
 	client     client.Client
+	nameSpace  types.NamespacedName
 	statusLock *sync.Mutex
 	metric     chan *topolvm.Metrics
 }
 
-func NewStatusChecker(context *cluster.Context, statusLock *sync.Mutex, metric chan *topolvm.Metrics) *ClusterStatusChecker {
+func NewStatusChecker(ctx context.Context, context *cluster.Context, statusLock *sync.Mutex, metric chan *topolvm.Metrics, name types.NamespacedName) *ClusterStatusChecker {
 	return &ClusterStatusChecker{
+		ctx:        ctx,
 		context:    context,
 		client:     context.Client,
 		interval:   topolvm.CheckStatusInterval,
 		statusLock: statusLock,
 		metric:     metric,
+		nameSpace:  name,
 	}
 }
 
-func (c *ClusterStatusChecker) CheckClusterStatus(namespacedName *types.NamespacedName, stopCh chan struct{}, ref *metav1.OwnerReference) {
+func (c *ClusterStatusChecker) CheckClusterStatus() {
 	// check the status immediately before starting the loop
-	c.checkStatus(namespacedName)
+	c.checkStatus()
 	for {
 		select {
-		case <-stopCh:
+		case <-c.ctx.Done():
 			logger.Infof("stopping monitoring of cluster status")
 			return
 
 		case <-time.After(c.interval):
-			c.checkStatus(namespacedName)
-			if err := EnableServiceMonitor(ref); err != nil {
+			c.checkStatus()
+			if err := EnableServiceMonitor(nil); err != nil {
 				logger.Errorf("monitor failed err %s", err.Error())
 			}
 
-			if err := CreateOrUpdatePrometheusRule(ref); err != nil {
+			if err := CreateOrUpdatePrometheusRule(nil); err != nil {
 				logger.Errorf("create rule failed err %s", err.Error())
 			}
 		}
 	}
 }
 
-func (c *ClusterStatusChecker) checkStatus(namespacedName *types.NamespacedName) {
+func (c *ClusterStatusChecker) checkStatus() {
 
 	ctx := context.TODO()
 	pods, err := c.context.Clientset.CoreV1().Pods(topolvm.NameSpace).List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", topolvm.TopolvmComposeAttr, topolvm.TopolvmComposeNode)})
@@ -73,7 +77,7 @@ func (c *ClusterStatusChecker) checkStatus(namespacedName *types.NamespacedName)
 	c.statusLock.Lock()
 	defer c.statusLock.Unlock()
 	topolvmCluster := &topolvmv2.TopolvmCluster{}
-	err = c.context.Client.Get(ctx, *namespacedName, topolvmCluster)
+	err = c.context.Client.Get(ctx, c.nameSpace, topolvmCluster)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			logger.Debug("topolvm cluster resource not found. Ignoring since object must be deleted.")
@@ -249,7 +253,7 @@ func (c *ClusterStatusChecker) checkStatus(namespacedName *types.NamespacedName)
 	clusterMetric.Cluster = topolvmCluster.Name
 	c.metric <- &clusterMetric
 	if err := k8sutil.UpdateStatus(c.context.Client, topolvmCluster); err != nil {
-		logger.Errorf("failed to update cluster %q status. %v", namespacedName.Name, err)
+		logger.Errorf("failed to update cluster %q status. %v", c.nameSpace.Name, err)
 	}
 
 }

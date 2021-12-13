@@ -2,7 +2,6 @@ package csi
 
 import (
 	_ "embed"
-	"fmt"
 	"github.com/alauda/topolvm-operator/pkg/operator/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/pkg/errors"
@@ -21,8 +20,6 @@ var (
 )
 
 const (
-	KubeMinMajor                     = "1"
-	kubeMinMinor                     = "21"
 	defaultLogLevel            uint8 = 0
 	provisionerTolerationsEnv        = "CSI_PROVISIONER_TOLERATIONS"
 	provisionerNodeAffinityEnv       = "CSI_PROVISIONER_NODE_AFFINITY"
@@ -63,21 +60,17 @@ var (
 )
 
 func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8sutil.OwnerInfo) error {
+	logger.Info("start csi raw device driver")
 	var (
 		err                  error
 		rawDevicePlugin      *apps.DaemonSet
 		rawDeviceProvisioner *apps.Deployment
-		rawDeivceCSIDriver   *storagev1.CSIDriver
+		rawDeviceCSIDriver   *storagev1.CSIDriver
 	)
 
 	tp := csi.TemplateParam{
 		Param:     CSIParam,
 		Namespace: r.opConfig.OperatorNamespace,
-	}
-	// if the user didn't specify a custom DriverNamePrefix use
-	// the namespace (and a dot).
-	if tp.DriverNamePrefix == "" {
-		tp.DriverNamePrefix = fmt.Sprintf("%s.", r.opConfig.OperatorNamespace)
 	}
 
 	// default value `system-node-critical` is the highest available priority
@@ -86,15 +79,6 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	// default value `system-cluster-critical` is applied for some
 	// critical pods in cluster but less priority than plugin pods
 	tp.ProvisionerPriorityClassName = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_PRIORITY_CLASSNAME", "")
-
-	enableRawDevice := k8sutil.GetValue(r.opConfig.Parameters, "CSI_ENABLE_RAW_DEVICE", "false")
-
-	// if k8s >= v1.17 enable RBD and CephFS snapshotter by default
-	if enableRawDevice == "true" && ver.Major == KubeMinMajor && ver.Minor >= kubeMinMinor {
-		EnableRawDevice = true
-	} else {
-		EnableRawDevice = false
-	}
 
 	logger.Infof("Kubernetes version is %s.%s", ver.Major, ver.Minor)
 
@@ -130,17 +114,17 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	if EnableRawDevice {
 		rawDevicePlugin, err = csi.TemplateToDaemonSet("raw-device-node", CSIRawDeviceNodeTemplatePath, tp)
 		if err != nil {
-			return errors.Wrap(err, "failed to load rbdplugin template")
+			return errors.Wrap(err, "failed to load raw device plugin daemonset template")
 		}
 
 		rawDeviceProvisioner, err = csi.TemplateToDeployment("raw-device-provisioner", CSIRawDeviceControllerTemplatePath, tp)
 		if err != nil {
-			return errors.Wrap(err, "failed to load rbd provisioner deployment template")
+			return errors.Wrap(err, "failed to load raw device provisioner deployment template")
 		}
 
-		rawDeivceCSIDriver, err = csi.TemplateToCSIDriver("raw-device-csi-driver", RawDeviceCSIDriverTemplatePath, tp)
+		rawDeviceCSIDriver, err = csi.TemplateToCSIDriver("raw-device-csi-driver", RawDeviceCSIDriverTemplatePath, tp)
 		if err != nil {
-			return errors.Wrap(err, "failed to load rbd provisioner deployment template")
+			return errors.Wrap(err, "failed to load raw device csi driver template")
 		}
 	}
 
@@ -161,11 +145,11 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, rawDevicePluginResource, &rawDevicePlugin.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(rawDevicePlugin)
 		if err != nil {
-			return errors.Wrapf(err, "failed to set owner reference to rbd plugin daemonset %q", rawDevicePlugin.Name)
+			return errors.Wrapf(err, "failed to set owner reference to raw device plugin daemonset %q", rawDevicePlugin.Name)
 		}
 		err = k8sutil.CreateDaemonSet(r.opManagerContext, csiRawDevicePlugin, r.opConfig.OperatorNamespace, r.context.Clientset, rawDevicePlugin)
 		if err != nil {
-			return errors.Wrapf(err, "failed to start rbdplugin daemonset %q", rawDevicePlugin.Name)
+			return errors.Wrapf(err, "failed to start raw device daemonset %q", rawDevicePlugin.Name)
 		}
 	}
 
@@ -179,7 +163,7 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, rawDeviceProvisionerResource, &rawDeviceProvisioner.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(rawDeviceProvisioner)
 		if err != nil {
-			return errors.Wrapf(err, "failed to set owner reference to rbd provisioner deployment %q", rawDeviceProvisioner.Name)
+			return errors.Wrapf(err, "failed to set owner reference to raw device provisioner deployment %q", rawDeviceProvisioner.Name)
 		}
 		antiAffinity := csi.GetPodAntiAffinity("app", csiRawDeviceProvisioner)
 		rawDeviceProvisioner.Spec.Template.Spec.Affinity.PodAntiAffinity = &antiAffinity
@@ -188,15 +172,15 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 		}
 		_, err = k8sutil.CreateOrUpdateDeployment(r.opManagerContext, r.context.Clientset, rawDeviceProvisioner)
 		if err != nil {
-			return errors.Wrapf(err, "failed to start rbd provisioner deployment %q", rawDeviceProvisioner.Name)
+			return errors.Wrapf(err, "failed to start raw device provisioner deployment %q", rawDeviceProvisioner.Name)
 		}
-		logger.Info("successfully started CSI Ceph RBD driver")
+		logger.Info("successfully started CSI raw device driver")
 	}
 
-	if rawDeivceCSIDriver != nil {
-		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeivceCSIDriver)
+	if rawDeviceCSIDriver != nil {
+		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeviceCSIDriver)
 		if err != nil {
-			return errors.Wrapf(err, "failed to start rbd provisioner deployment %q", rawDeviceProvisioner.Name)
+			return errors.Wrapf(err, "failed to start raw device driver %q", rawDeviceProvisioner.Name)
 		}
 	}
 
@@ -205,7 +189,7 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 
 func (r *CSIRawDeviceController) stopDrivers(ver *version.Info) {
 	if !EnableRawDevice {
-		logger.Info("CSI Ceph RBD driver disabled")
+		logger.Info("CSI raw device driver disabled")
 		succeeded := r.deleteCSIDriverResources(ver, csiRawDevicePlugin, csiRawDeviceProvisioner, "rawdevice.nativestor.io")
 		if succeeded {
 			logger.Info("successfully removed CSI Ceph RBD driver")

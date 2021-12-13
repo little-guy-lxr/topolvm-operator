@@ -14,10 +14,10 @@ spec:
         app.kubernetes.io/name: raw-device-provisioner
     spec:
       containers:
-        - name: raw-device-controller
+        - name: csi-raw-device-plugin
           command:
             - /raw-device-controller
-          image: {{ .CSIPluginImage }}
+          image: {{ .RawDeviceImage }}
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /run/raw-device
@@ -49,11 +49,11 @@ spec:
           volumeMounts:
             - mountPath: /run/raw-device
               name: socket-dir
-        - name: liveness-probe
+        - name: liveness-prometheus
           command:
             - /livenessprobe
             - --csi-address=/run/raw-device/csi-rawdevice.sock
-          image: {{ .CSIPluginImage }}
+          image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /run/raw-device

@@ -19,6 +19,7 @@ package discover
 import (
 	"context"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"github.com/alauda/topolvm-operator/pkg/operator"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
@@ -28,9 +29,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func MakeDiscoverDevicesDaemonset(clientset kubernetes.Interface, appName string, image string, useLoop bool) error {
+func MakeDiscoverDevicesDaemonset(clientset kubernetes.Interface, appName string, image string, useLoop bool, enableRawDevice bool) error {
 
-	daemon := getDaemonset(appName, image, useLoop)
+	daemon := getDaemonset(appName, image, useLoop, enableRawDevice)
 
 	operatorPod, err := k8sutil.GetRunningPod(clientset)
 	if err != nil {
@@ -44,7 +45,7 @@ func MakeDiscoverDevicesDaemonset(clientset kubernetes.Interface, appName string
 	return nil
 }
 
-func getDaemonset(appName string, image string, useLoop bool) *v1.DaemonSet {
+func getDaemonset(appName string, image string, useLoop bool, enableRawDevice bool) *v1.DaemonSet {
 
 	var volumes []corev1.Volume
 	devVolume := corev1.Volume{Name: "devices", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/dev"}}}
@@ -84,6 +85,10 @@ func getDaemonset(appName string, image string, useLoop bool) *v1.DaemonSet {
 	if useLoop {
 		env = append(env, corev1.EnvVar{Name: topolvm.UseLoopEnv, Value: topolvm.UseLoop})
 		annotate[topolvm.LoopAnnotationsKey] = topolvm.LoopAnnotationsVal
+	}
+
+	if enableRawDevice {
+		env = append(env, corev1.EnvVar{Name: operator.EnableRawDeviceEnv, Value: "true"})
 	}
 
 	daemonset := &v1.DaemonSet{

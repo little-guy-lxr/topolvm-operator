@@ -134,3 +134,13 @@ func GetDeploymentOwnerReference(ctx context.Context, clientset kubernetes.Inter
 	}
 	return deploymentRef, nil
 }
+
+func CheckDeploymentIsExisting(ctx context.Context, clientset kubernetes.Interface, deploymentName, namespace string) (bool, error) {
+	_, err := clientset.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return false, errors.Wrapf(err, "failed to detect deployment %s", deploymentName)
+	} else if err == nil {
+		return true, nil
+	}
+	return false, nil
+}

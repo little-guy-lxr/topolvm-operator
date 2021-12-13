@@ -22,13 +22,17 @@ import (
 	"fmt"
 	topolvmcommon "github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 	"github.com/alauda/topolvm-operator/pkg/operator"
-	"github.com/alauda/topolvm-operator/pkg/operator/raw_device/csi"
+	"github.com/alauda/topolvm-operator/pkg/operator/discover"
+	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
+	rawdev_csi "github.com/alauda/topolvm-operator/pkg/operator/raw_device/csi"
+	topolvmctr "github.com/alauda/topolvm-operator/pkg/operator/topolvm/controller"
+	topolvm_csi "github.com/alauda/topolvm-operator/pkg/operator/topolvm/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/metric"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 
 	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/cmd/topolvm"
-	"github.com/alauda/topolvm-operator/controllers"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/spf13/cobra"
@@ -62,8 +66,9 @@ func addScheme() {
 }
 
 var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, operator.OperatorConfig) error{
-	controllers.Add,
-	csi.Add,
+	rawdev_csi.Add,
+	topolvmctr.Add,
+	topolvm_csi.Add,
 }
 
 func startOperator(cmd *cobra.Command, args []string) error {
@@ -112,24 +117,33 @@ func startOperator(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = controllers.RemoveNodeCapacityAnnotations(ctx.Clientset)
+	err = topolvmctr.RemoveNodeCapacityAnnotations(ctx.Clientset)
 	if err != nil {
 		logger.Errorf("RemoveNodeCapacityAnnotations failed err %v", err)
 		return fmt.Errorf("RemoveNodeCapacityAnnotations failed err %v", err)
 	}
 
 	operatorImage := topolvm.GetOperatorImage(ctx.Clientset, "")
-	c := controllers.NewTopolvmClusterReconciler(mgr.GetScheme(), ctx, operatorImage, metricsCh)
-	if err := c.SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create controller", "controller", "TopolvmCluster")
-		os.Exit(1)
-	}
 
 	opctx := context.TODO()
+	setting, err := ctx.Clientset.CoreV1().ConfigMaps(topolvmcommon.NameSpace).Get(opctx, operator.OperatorSettingConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		logger.Error(err, "unable get configmap operator setting", "configmap", operator.OperatorSettingConfigMapName)
+	}
+
 	config := operator.OperatorConfig{
 		Image:            operatorImage,
 		NamespaceToWatch: topolvmcommon.NameSpace,
+		Parameters:       setting.Data,
 	}
+
+	enableRawDev := k8sutil.GetValue(config.Parameters, operator.EnableRawDeviceEnv, "false")
+	if enableRawDev == "true" {
+		discover.MakeDiscoverDevicesDaemonset(ctx.Clientset, operator.DiscoverAppName, operatorImage, true, true)
+	} else {
+		discover.MakeDiscoverDevicesDaemonset(ctx.Clientset, operator.DiscoverAppName, operatorImage, true, true)
+	}
+
 	for _, f := range AddToManagerFuncs {
 		if err := f(mgr, ctx, opctx, config); err != nil {
 			return err

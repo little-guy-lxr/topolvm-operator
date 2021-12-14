@@ -27,8 +27,6 @@ import (
 type RawDeviceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of RawDevice. Edit rawdevice_types.go to remove/update
 	NodeName string `json:"nodeName"`
 	Size     int64  `json:"size"`
 	Type     string `json:"type"`

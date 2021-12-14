@@ -1,0 +1,22 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: topolvm-operator-setting
+  namespace: topolvm-system
+data:
+  KUBELET_ROOT_DIR: "/var/lib/kubelet"
+  OPERATOR_LOG_LEVEL: "INFO"
+
+  ENABLE_RAW_DEVICE: "false"
+  RNABLE_TOPOLVM: "true"
+  RAW_DEVICE_IMAGE: "build-harbor.alauda.cn/acp/raw-device:dev"
+  TOPOLVM_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"
+  # Set replicas for csi provisioner deployment.
+  CSI_PROVISIONER_REPLICAS: "2"
+
+  CSI_LOG_LEVEL: "DEBUG"
+  CSI_REGISTRAR_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"
+  CSI_RESIZER_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"
+  CSI_PROVISIONER_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"
+  CSI_SNAPSHOTTER_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"
+  CSI_ATTACHER_IMAGE: "quay.io/topolvm/topolvm-with-sidecar:0.10"

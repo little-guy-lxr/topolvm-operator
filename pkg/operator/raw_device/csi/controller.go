@@ -2,7 +2,6 @@ package csi
 
 import (
 	"context"
-	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	controllerutil "github.com/alauda/topolvm-operator/pkg/operator/controller"
@@ -163,13 +162,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for ConfigMap (operator config)
 	err = c.Watch(&source.Kind{
 		Type: &v1.ConfigMap{TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: v1.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
-	if err != nil {
-		return err
-	}
-
-	// Watch for CephCluster
-	err = c.Watch(&source.Kind{
-		Type: &topolvmv2.TopolvmCluster{TypeMeta: metav1.TypeMeta{Kind: "TopolvmCluster", APIVersion: v1.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
 	if err != nil {
 		return err
 	}

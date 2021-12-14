@@ -17,7 +17,6 @@ limitations under the License.
 package csi
 
 import (
-	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	"regexp"
 
@@ -38,18 +37,6 @@ func predicateController() predicate.Funcs {
 				// ConfigMap was created
 				return cm.Name == operator.OperatorSettingConfigMapName
 			}
-
-			// If a Ceph Cluster is created we want to reconcile the csi driver
-			if topolvmCluster, ok := e.Object.(*topolvmv2.TopolvmCluster); ok {
-				// This allows us to avoid a double reconcile of the CSI controller if this is not
-				// the first generation of the CephCluster. So only return true if this is the very
-				// first instance of the CephCluster
-				// Corner case is when the cluster is created but the operator is down AND the cm
-				// does not exist... However, these days the operator config map is part of the
-				// operator.yaml so it's probably acceptable?
-				return topolvmCluster.Generation == 1
-			}
-
 			return false
 		},
 
@@ -79,7 +66,7 @@ func predicateController() predicate.Funcs {
 }
 
 func findCSIChange(str string) bool {
-	var re = regexp.MustCompile(`(?m)^(\+|-).*(\"RAW_DEVICE_CSI_|\"CSI_).*,$`)
+	var re = regexp.MustCompile(`(?m)^(\+|-).*(\"RAW_DEVICE|\"CSI_).*,$`)
 	found := re.FindAllString(str, -1)
 	if len(found) > 0 {
 		for _, match := range found {

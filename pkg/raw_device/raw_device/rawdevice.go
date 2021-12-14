@@ -19,7 +19,7 @@ COMMAND:
 
 func main() {
 	name := filepath.Base(os.Args[0])
-	if name == "rawdevice" {
+	if name == "raw-device" {
 		if len(os.Args) == 1 {
 			usage()
 			os.Exit(1)
@@ -29,9 +29,9 @@ func main() {
 	}
 
 	switch name {
-	case "raw-device-node":
+	case "raw-device-plugin":
 		node.Execute()
-	case "raw-device-controller":
+	case "raw-device-provisioner":
 		controller.Execute()
 	default:
 		usage()

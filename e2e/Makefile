@@ -112,7 +112,7 @@ test: topolvm-operator.img $(SERVER_CERT_FILES)
 
 $(SERVER_CERT_FILES):
 	mkdir -p certs
-	go run ../pkg/gencert -outdir certs
+	go run ../pkg/operator/topolvm/gencert -outdir certs
 
 clean: delete-dev
 	rm -rf $(SERVER_CERT_FILES) topolvm-operator.img build/ $(BACKING_STORE)/backing_store*

@@ -5,6 +5,7 @@ import (
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	controllerutil "github.com/alauda/topolvm-operator/pkg/operator/controller"
+	"github.com/alauda/topolvm-operator/pkg/operator/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/pkg/errors"
@@ -100,7 +101,7 @@ func (r *CSIRawDeviceController) reconcile(request reconcile.Request) (reconcile
 
 	err = r.validateAndConfigureDrivers(serverVersion, ownerInfo)
 	if err != nil {
-		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed configure ceph csi")
+		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed configure raw device csi")
 	}
 	return reconcile.Result{}, nil
 
@@ -145,8 +146,9 @@ func (r *CSIRawDeviceController) setParams() error {
 	}
 
 	CSIParam.RawDeviceImage = k8sutil.GetValue(r.opConfig.Parameters, "RAW_DEVICE_IMAGE", DefaultRawDevicePluginImage)
-	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", DefaultRegistrarImage)
-	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_IMAGE", DefaultProvisionerImage)
+	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", csi.DefaultRegistrarImage)
+	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_IMAGE", csi.DefaultProvisionerImage)
+	CSIParam.LivenessImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_LIVENESS_IMAGE", csi.DefaultLivenessImage)
 
 	return nil
 }
@@ -178,6 +180,9 @@ func validateCSIParam() error {
 	}
 	if len(CSIParam.ProvisionerImage) == 0 {
 		return errors.New("missing csi provisioner image")
+	}
+	if len(CSIParam.LivenessImage) == 0 {
+		return errors.New("missing csi liveness image")
 	}
 	return nil
 }

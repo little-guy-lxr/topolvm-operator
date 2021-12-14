@@ -7,8 +7,6 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: raw-device-plugin
-  updateStrategy:
-    type: {{ .CSIRawDeviceNodeUpdateStrategy }}
   template:
     metadata:
       labels:

@@ -6,6 +6,7 @@ import (
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	controllerutil "github.com/alauda/topolvm-operator/pkg/operator/controller"
+	"github.com/alauda/topolvm-operator/pkg/operator/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/pkg/errors"
@@ -101,7 +102,7 @@ func (r *CSITopolvmController) reconcile(request reconcile.Request) (reconcile.R
 
 	err = r.validateAndConfigureDrivers(serverVersion, ownerInfo)
 	if err != nil {
-		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed configure ceph csi")
+		return controllerutil.ImmediateRetryResult, errors.Wrap(err, "failed configure topolvm csi")
 	}
 	return reconcile.Result{}, nil
 
@@ -132,7 +133,6 @@ func (r *CSITopolvmController) validateAndConfigureDrivers(serverVersion *versio
 		return errors.Wrap(err, "failed to start raw device csi drivers")
 	}
 
-	// Check whether RBD or CephFS needs to be disabled
 	r.stopDrivers(serverVersion)
 
 	return nil
@@ -144,7 +144,13 @@ func (r *CSITopolvmController) setParams() error {
 	if EnableTopolvm, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "ENABLE_TOPOLVM", "false")); err != nil {
 		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_ENABLE_TOPOLVM'")
 	}
-	CSIParam.TopolvmImage = k8sutil.GetValue(r.opConfig.Parameters, "TOPOLVM_PLUGIN_IMAGE", DefaultTopolvmImage)
+	CSIParam.TopolvmImage = k8sutil.GetValue(r.opConfig.Parameters, "TOPOLVM_IMAGE", DefaultTopolvmImage)
+	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", csi.DefaultRegistrarImage)
+	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_IMAGE", csi.DefaultProvisionerImage)
+	CSIParam.LivenessImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_LIVENESS_IMAGE", csi.DefaultLivenessImage)
+	CSIParam.ResizerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_RESIZER_IMAGE", csi.DefaultResizerImage)
+	CSIParam.SnapshotterImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_SNAPSHOTTER_IMAGE", csi.DefaultSnapshotterImage)
+
 	return nil
 }
 
@@ -175,7 +181,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 func validateCSIParam() error {
 	if len(CSIParam.TopolvmImage) == 0 {
-		return errors.New("missing csi raw device plugin image")
+		return errors.New("missing csi topolvm image")
 	}
 	return nil
 }

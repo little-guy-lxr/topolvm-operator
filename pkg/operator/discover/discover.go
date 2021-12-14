@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
+	"k8s.io/apimachinery/pkg/labels"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -30,7 +31,9 @@ import (
 	"syscall"
 	"time"
 
+	rawapi "github.com/alauda/topolvm-operator/apis/rawdevice/v1"
 	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
+	rawv1 "github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/listers/rawdevice/v1"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/alauda/topolvm-operator/pkg/util/sys"
@@ -47,13 +50,31 @@ const (
 )
 
 var (
-	logger          = capnslog.NewPackageLogger("topolvm/operator", "discover")
+	logger = capnslog.NewPackageLogger("topolvm/operator", "discover")
+)
+
+type DeviceManager struct {
+	context         *cluster.Context
+	udevEventPeriod time.Duration
+	probeInterval   time.Duration
+	rawDeviceLister rawv1.RawDeviceLister
 	nodeName        string
 	namespace       string
-	cmName          string
-	udevEventPeriod = time.Duration(5) * time.Second
 	useLoop         bool
-)
+	cmName          string
+}
+
+func NewDeviceManager(context *cluster.Context, udevEventPeriod, probeInterval time.Duration, rawDeviceLister rawv1.RawDeviceLister, nodeName, namespace string, useLoop bool) *DeviceManager {
+	return &DeviceManager{
+		context:         context,
+		udevEventPeriod: udevEventPeriod,
+		probeInterval:   probeInterval,
+		rawDeviceLister: rawDeviceLister,
+		nodeName:        nodeName,
+		namespace:       namespace,
+		useLoop:         useLoop,
+	}
+}
 
 // Monitors udev for block device changes, and collapses these events such that
 // only one event is emitted per period in order to deal with flapping.
@@ -100,52 +121,43 @@ func udevBlockMonitor(c chan string, period time.Duration) {
 	}
 }
 
-func Run(context *cluster.Context, probeInterval time.Duration) error {
-	if context == nil {
-		return fmt.Errorf("nil context")
-	}
-	logger.Debugf("device discovery interval is %q", probeInterval.String())
-	nodeName = os.Getenv(topolvm.NodeNameEnv)
-	namespace = os.Getenv(topolvm.PodNameSpaceEnv)
-	if os.Getenv(topolvm.UseLoopEnv) == topolvm.UseLoop {
-		useLoop = true
-	} else {
-		useLoop = false
-	}
+func (m *DeviceManager) Run() error {
 
-	cmName = k8sutil.TruncateNodeName(topolvm.LvmdConfigMapFmt, nodeName)
+	logger.Debugf("device discovery interval is %q", m.probeInterval.String())
+
+	m.cmName = k8sutil.TruncateNodeName(topolvm.LvmdConfigMapFmt, m.nodeName)
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGTERM)
 
-	err := updateDeviceCM(context)
+	err := m.updateDeviceCM()
 	if err != nil {
 		logger.Infof("failed to update device configmap: %v", err)
 		return err
 	}
 
-	if useLoop {
-		err := checkLoopDevice(context)
+	if m.useLoop {
+		err := m.checkLoopDevice()
 		if err != nil {
-			go retryLoopDevice(context)
+			go m.retryLoopDevice()
 		}
 	}
 
 	udevEvents := make(chan string)
-	go udevBlockMonitor(udevEvents, udevEventPeriod)
+	go udevBlockMonitor(udevEvents, m.udevEventPeriod)
 	for {
 		select {
 		case <-sigc:
 			logger.Infof("shutdown signal received, exiting...")
 			return nil
-		case <-time.After(probeInterval):
-			if err := updateDeviceCM(context); err != nil {
+		case <-time.After(m.probeInterval):
+			if err := m.updateDeviceCM(); err != nil {
 				logger.Errorf("failed to update device configmap during probe interval. %v", err)
 			}
-			checkDeviceClass(context)
+			m.checkDeviceClass()
 		case _, ok := <-udevEvents:
 			if ok {
 				logger.Info("trigger probe from udev event")
-				if err := updateDeviceCM(context); err != nil {
+				if err := m.updateDeviceCM(); err != nil {
 					logger.Errorf("failed to update device configmap triggered from udev event. %v", err)
 				}
 			} else {
@@ -156,9 +168,94 @@ func Run(context *cluster.Context, probeInterval time.Duration) error {
 	}
 }
 
-func retryLoopDevice(clusterdContext *cluster.Context) {
+func (m *DeviceManager) createOrUpdateRawDevice(devices []*sys.LocalDiskAppendInfo) error {
+
+	set := labels.Set{"node": m.nodeName}
+	rawDevicelist, err := m.rawDeviceLister.List(labels.SelectorFromSet(set))
+	if err != nil {
+		return err
+	}
+
+	for _, disk := range devices {
+		if disk.Available {
+			found, index := lookupRawDevices(disk, rawDevicelist)
+			if found {
+				if rawDevicelist[index].Status.Name == "" {
+					if !rawDevicelist[index].Spec.Available {
+						//update available
+						raw := rawDevicelist[index].DeepCopy()
+						raw.Spec.Available = true
+						_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Update(context.TODO(), raw, metav1.UpdateOptions{})
+						if err != nil {
+							logger.Errorf("update raw device %s failed err %v", raw.Name, err)
+						}
+					}
+				}
+
+			} else {
+				raw := convertDiskToRawDevice(m.nodeName, disk)
+
+				_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Create(context.TODO(), raw, metav1.CreateOptions{})
+				if err != nil {
+					logger.Errorf("create raw device %s failed err %v", raw.Name, err)
+				}
+			}
+
+		} else {
+			found, index := lookupRawDevices(disk, rawDevicelist)
+			if found {
+				if rawDevicelist[index].Status.Name == "" {
+					//update available to false
+					if rawDevicelist[index].Spec.Available {
+						raw := rawDevicelist[index].DeepCopy()
+						raw.Spec.Available = false
+						_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Update(context.TODO(), raw, metav1.UpdateOptions{})
+						if err != nil {
+							logger.Errorf("update raw device %s failed err %v", raw.Name, err)
+						}
+					}
+
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func lookupRawDevices(disk *sys.LocalDiskAppendInfo, rawDevices []*rawapi.RawDevice) (bool, int) {
+	for index, dev := range rawDevices {
+		if dev.Name == disk.UUID {
+			return true, index
+		}
+	}
+	return false, 0
+}
+
+func convertDiskToRawDevice(nodeName string, disk *sys.LocalDiskAppendInfo) *rawapi.RawDevice {
+	return &rawapi.RawDevice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: disk.UUID,
+			Labels: map[string]string{
+				"node": nodeName,
+			},
+		},
+		Spec: rawapi.RawDeviceSpec{
+			NodeName:  nodeName,
+			Size:      int64(disk.Size),
+			Type:      disk.Type,
+			RealPath:  disk.RealPath,
+			UUID:      disk.UUID,
+			Available: disk.Available,
+			Major:     disk.Major,
+			Minor:     disk.Minor,
+		},
+	}
+}
+
+func (m *DeviceManager) retryLoopDevice() {
 	for {
-		err := checkLoopDevice(clusterdContext)
+		err := m.checkLoopDevice()
 		if err == nil {
 			return
 		}
@@ -167,9 +264,9 @@ func retryLoopDevice(clusterdContext *cluster.Context) {
 	}
 }
 
-func checkLoopDevice(clusterdContext *cluster.Context) error {
+func (m *DeviceManager) checkLoopDevice() error {
 	ctx := context.TODO()
-	cmTemp, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
+	cmTemp, err := m.context.Clientset.CoreV1().ConfigMaps(m.namespace).Get(ctx, m.cmName, metav1.GetOptions{})
 	if err == nil {
 		if loopDevices, ok := cmTemp.Data[topolvm.VgStatusConfigMapKey]; ok {
 
@@ -184,7 +281,7 @@ func checkLoopDevice(clusterdContext *cluster.Context) error {
 			for _, ele := range nodeStatus.Loops {
 				if ele.Status == topolvm.LoopCreateSuccessful {
 
-					err := sys.ReSetupLoop(clusterdContext.Executor, ele.File, ele.DeviceName)
+					err := sys.ReSetupLoop(m.context.Executor, ele.File, ele.DeviceName)
 					if err != nil {
 						failed = true
 						logger.Errorf("losetup device %s file %s failed %v", ele.DeviceName, ele.File, err)
@@ -210,10 +307,10 @@ func checkLoopDevice(clusterdContext *cluster.Context) error {
 	return nil
 }
 
-func updateDeviceCM(clusterdContext *cluster.Context) error {
+func (m *DeviceManager) updateDeviceCM() error {
 	ctx := context.TODO()
 	logger.Infof("updating device configmap")
-	devices, err := sys.GetAllDevices(clusterdContext)
+	devices, err := sys.GetAllDevices(m.context)
 	if err != nil {
 		logger.Errorf("can not list disk err:%s", err)
 		return err
@@ -224,16 +321,16 @@ func updateDeviceCM(clusterdContext *cluster.Context) error {
 		return err
 	}
 	deviceStr := string(deviceJSON)
-	cm, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
+	cm, err := m.context.Clientset.CoreV1().ConfigMaps(m.namespace).Get(ctx, m.cmName, metav1.GetOptions{})
 	if err == nil {
 		lastDevice := cm.Data[topolvm.LocalDiskCMData]
 		logger.Debugf("last devices %s", lastDevice)
 		if lastDevice != deviceStr {
 			newcm := cm.DeepCopy()
 			newcm.Data[topolvm.LocalDiskCMData] = deviceStr
-			err = k8sutil.PatchConfigMap(clusterdContext.Clientset, newcm.Namespace, cm, newcm)
+			err = k8sutil.PatchConfigMap(m.context.Clientset, newcm.Namespace, cm, newcm)
 			if err != nil {
-				logger.Errorf("failed to update configmap %s: %v", cmName, err)
+				logger.Errorf("failed to update configmap %s: %v", m.cmName, err)
 				return err
 			}
 		}
@@ -248,11 +345,11 @@ func updateDeviceCM(clusterdContext *cluster.Context) error {
 
 		// the map doesn't exist yet, create it now
 		annotations := make(map[string]string)
-		annotations[topolvm.LvmdAnnotationsNodeKey] = nodeName
+		annotations[topolvm.LvmdAnnotationsNodeKey] = m.nodeName
 		cm = &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      cmName,
-				Namespace: namespace,
+				Name:      m.cmName,
+				Namespace: m.namespace,
 				Labels: map[string]string{
 					topolvm.LvmdConfigMapLabelKey: topolvm.LvmdConfigMapLabelValue,
 				},
@@ -261,20 +358,20 @@ func updateDeviceCM(clusterdContext *cluster.Context) error {
 			Data: data,
 		}
 
-		_, err = clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+		_, err = m.context.Clientset.CoreV1().ConfigMaps(m.namespace).Create(ctx, cm, metav1.CreateOptions{})
 		if err != nil {
 			logger.Infof("failed to create configmap: %v", err)
-			return fmt.Errorf("failed to create local device map %s: %+v", cmName, err)
+			return fmt.Errorf("failed to create local device map %s: %+v", m.cmName, err)
 		}
 		return nil
 	}
 	return nil
 }
 
-func checkDeviceClass(clusterdContext *cluster.Context) error {
+func (m *DeviceManager) checkDeviceClass() error {
 	logger.Info("check device status")
 	ctx := context.TODO()
-	cm, err := clusterdContext.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, cmName, metav1.GetOptions{})
+	cm, err := m.context.Clientset.CoreV1().ConfigMaps(m.namespace).Get(ctx, m.cmName, metav1.GetOptions{})
 	if err == nil {
 		newcm := cm.DeepCopy()
 		status := newcm.Data[topolvm.VgStatusConfigMapKey]
@@ -290,7 +387,7 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 		}
 
 		for index1, ele := range nodeStatus.SuccessClasses {
-			pvs, err := sys.GetPhysicalVolume(clusterdContext.Executor, ele.VgName)
+			pvs, err := sys.GetPhysicalVolume(m.context.Executor, ele.VgName)
 			if err != nil {
 				logger.Errorf("list pvs of vg %s failed err %v", ele.VgName, err)
 				return err
@@ -316,9 +413,9 @@ func checkDeviceClass(clusterdContext *cluster.Context) error {
 			return err
 		}
 		newcm.Data[topolvm.VgStatusConfigMapKey] = string(res)
-		err = k8sutil.PatchConfigMap(clusterdContext.Clientset, newcm.Namespace, cm, newcm)
+		err = k8sutil.PatchConfigMap(m.context.Clientset, newcm.Namespace, cm, newcm)
 		if err != nil {
-			logger.Errorf("failed to update configmap %s: %v", cmName, err)
+			logger.Errorf("failed to update configmap %s: %v", m.cmName, err)
 			return err
 		}
 	}

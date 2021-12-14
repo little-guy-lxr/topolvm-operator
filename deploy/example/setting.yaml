@@ -8,7 +8,7 @@ data:
   OPERATOR_LOG_LEVEL: "INFO"
 
   ENABLE_RAW_DEVICE: "false"
-  RNABLE_TOPOLVM: "true"
+  ENABLE_TOPOLVM: "true"
   RAW_DEVICE_IMAGE: "build-harbor.alauda.cn/acp/raw-device:dev"
   TOPOLVM_IMAGE: "build-harbor.alauda.cn/acp/raw-device:v3.6.0"
   # Set replicas for csi provisioner deployment.
@@ -20,6 +20,8 @@ data:
   CSI_PROVISIONER_IMAGE: "build-harbor.alauda.cn/acp/raw-device:v3.6.0"
   CSI_SNAPSHOTTER_IMAGE: "build-harbor.alauda.cn/acp/raw-device:v3.6.0"
   CSI_ATTACHER_IMAGE: "build-harbor.alauda.cn/acp/raw-device:v3.6.0"
+  CSI_LIVENESS_IMAGE: "build-harbor.alauda.cn/acp/raw-device:v3.6.0"
+
 
   CSI_PROVISIONER_TOLERATIONS: |
     - effect: NoSchedule

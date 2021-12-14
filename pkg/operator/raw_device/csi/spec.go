@@ -15,8 +15,6 @@ import (
 
 var (
 	DefaultRawDevicePluginImage = "quay.io/cephcsi/cephcsi:v3.4.0"
-	DefaultRegistrarImage       = "k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0"
-	DefaultProvisionerImage     = "k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0"
 )
 
 const (
@@ -136,12 +134,9 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	pluginNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, pluginNodeAffinityEnv, &corev1.NodeAffinity{})
 
 	if rawDevicePlugin != nil {
-		// get RBD plugin tolerations and node affinity, defaults to common tolerations and node affinity if not specified
 		rawDevicePluginTolerations := csi.GetToleration(r.opConfig.Parameters, rawDevicePluginTolerationsEnv, pluginTolerations)
 		rawDevicePluginNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, rawDevicePluginNodeAffinityEnv, pluginNodeAffinity)
-		// apply RBD plugin tolerations and node affinity
 		csi.ApplyToPodSpec(&rawDevicePlugin.Spec.Template.Spec, rawDevicePluginNodeAffinity, rawDevicePluginTolerations)
-		// apply resource request and limit to rbdplugin containers
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, rawDevicePluginResource, &rawDevicePlugin.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(rawDevicePlugin)
 		if err != nil {
@@ -154,12 +149,9 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	}
 
 	if rawDeviceProvisioner != nil {
-		// get RBD provisioner tolerations and node affinity, defaults to common tolerations and node affinity if not specified
 		rawDeviceProvisionerTolerations := csi.GetToleration(r.opConfig.Parameters, rawDeviceProvisionerTolerationsEnv, provisionerTolerations)
 		rawDeviceProvisionerNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, rawDeviceProvisionerNodeAffinityEnv, provisionerNodeAffinity)
-		// apply RBD provisioner tolerations and node affinity
 		csi.ApplyToPodSpec(&rawDeviceProvisioner.Spec.Template.Spec, rawDeviceProvisionerNodeAffinity, rawDeviceProvisionerTolerations)
-		// apply resource request and limit to rbd provisioner containers
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, rawDeviceProvisionerResource, &rawDeviceProvisioner.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(rawDeviceProvisioner)
 		if err != nil {
@@ -178,7 +170,7 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	}
 
 	if rawDeviceCSIDriver != nil {
-		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeviceCSIDriver)
+		err = k8sutil.CreateOrUpdateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeviceCSIDriver)
 		if err != nil {
 			return errors.Wrapf(err, "failed to start raw device driver %q", rawDeviceProvisioner.Name)
 		}
@@ -192,9 +184,9 @@ func (r *CSIRawDeviceController) stopDrivers(ver *version.Info) {
 		logger.Info("CSI raw device driver disabled")
 		succeeded := r.deleteCSIDriverResources(ver, csiRawDevicePlugin, csiRawDeviceProvisioner, "rawdevice.nativestor.io")
 		if succeeded {
-			logger.Info("successfully removed CSI Ceph RBD driver")
+			logger.Info("successfully removed CSI raw device driver")
 		} else {
-			logger.Error("failed to remove CSI Ceph RBD driver")
+			logger.Error("failed to remove CSI raw device driver")
 		}
 	}
 }

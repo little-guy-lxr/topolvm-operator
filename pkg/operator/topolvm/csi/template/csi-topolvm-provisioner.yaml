@@ -72,17 +72,6 @@ spec:
           volumeMounts:
             - mountPath: /run/topolvm
               name: socket-dir
-        - name: csi-attacher
-          command:
-            - /csi-attacher
-            - --csi-address=/run/topolvm/csi-topolvm.sock
-            - --leader-election
-            - --leader-election-namespace=operators
-          image: {{ .AttacherImage }}
-          imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - mountPath: /run/topolvm
-              name: socket-dir
         - name: csi-resizer
           command:
             - /csi-resizer

@@ -27,13 +27,14 @@ import (
 type RawDeviceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	NodeName string `json:"nodeName"`
-	Size     int64  `json:"size"`
-	Type     string `json:"type"`
-	RealPath string `json:"realPath"`
-	Major    uint32 `json:"major"`
-	Minor    uint32 `json:"minor"`
-	UUID     string `json:"uuid"`
+	NodeName  string `json:"nodeName"`
+	Size      int64  `json:"size"`
+	Type      string `json:"type"`
+	RealPath  string `json:"realPath"`
+	Major     uint32 `json:"major"`
+	Minor     uint32 `json:"minor"`
+	UUID      string `json:"uuid"`
+	Available bool   `json:"available"`
 }
 
 // RawDeviceStatus defines the observed state of RawDevice

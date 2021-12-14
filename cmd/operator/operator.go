@@ -27,7 +27,6 @@ import (
 	rawdev_csi "github.com/alauda/topolvm-operator/pkg/operator/raw_device/csi"
 	topolvmctr "github.com/alauda/topolvm-operator/pkg/operator/topolvm/controller"
 	topolvm_csi "github.com/alauda/topolvm-operator/pkg/operator/topolvm/csi"
-	"github.com/alauda/topolvm-operator/pkg/operator/topolvm/metric"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 
@@ -112,11 +111,6 @@ func startOperator(cmd *cobra.Command, args []string) error {
 
 	ctx := cluster.NewContext()
 	ctx.Client = mgr.GetClient()
-	metricsCh := make(chan *topolvmcommon.Metrics)
-	if err := mgr.Add(metric.NewMetricsExporter(metricsCh)); err != nil {
-		return err
-	}
-
 	err = topolvmctr.RemoveNodeCapacityAnnotations(ctx.Clientset)
 	if err != nil {
 		logger.Errorf("RemoveNodeCapacityAnnotations failed err %v", err)
@@ -132,9 +126,10 @@ func startOperator(cmd *cobra.Command, args []string) error {
 	}
 
 	config := operator.OperatorConfig{
-		Image:            operatorImage,
-		NamespaceToWatch: topolvmcommon.NameSpace,
-		Parameters:       setting.Data,
+		Image:             operatorImage,
+		NamespaceToWatch:  topolvmcommon.NameSpace,
+		Parameters:        setting.Data,
+		OperatorNamespace: topolvmcommon.NameSpace,
 	}
 
 	enableRawDev := k8sutil.GetValue(config.Parameters, operator.EnableRawDeviceEnv, "false")

@@ -264,7 +264,7 @@ func (l *lvmdConfigController) createTopolvmPluginNodeDeployment(node string) er
 	}
 
 	param := csi.Param{}
-	param.TopolvmImage = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "TOPOLVM_PLUGIN_IMAGE", csitopo.DefaultTopolvmImage)
+	param.TopolvmImage = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "TOPOLVM_IMAGE", csitopo.DefaultTopolvmImage)
 	tp := csi.TemplateParam{
 		Param:     param,
 		Namespace: l.topolvmController.opConfig.OperatorNamespace,
@@ -277,9 +277,7 @@ func (l *lvmdConfigController) createTopolvmPluginNodeDeployment(node string) er
 
 	topolvmPluginTolerations := csi.GetToleration(l.topolvmController.opConfig.Parameters, csitopo.TopolvmPluginTolerationsEnv, []v1.Toleration{})
 	topolvmPluginNodeAffinity := csi.GetNodeAffinity(l.topolvmController.opConfig.Parameters, csitopo.TopolvmPluginNodeAffinityEnv, &v1.NodeAffinity{})
-	// apply RBD provisioner tolerations and node affinity
 	csi.ApplyToPodSpec(&topolvmPlugin.Spec.Template.Spec, topolvmPluginNodeAffinity, topolvmPluginTolerations)
-	// apply resource request and limit to rbd provisioner containers
 	csi.ApplyResourcesToContainers(l.topolvmController.opConfig.Parameters, csitopo.TopolvmPluginResource, &topolvmPlugin.Spec.Template.Spec)
 
 	topolvmPlugin.Name = k8sutil.TruncateNodeName(topolvm.TopolvmNodeDeploymentFmt, node)

@@ -45,7 +45,6 @@ var (
 )
 
 var (
-	// Local package template path for RBD
 	//go:embed template/csi-topolvm-plugin.yaml
 	CSITopolvmPluginTemplatePath string
 	//go:embed template/csi-topolvm-provisioner.yaml
@@ -128,10 +127,9 @@ func (r *CSITopolvmController) startDrivers(ver *version.Info, ownerInfo *k8suti
 	provisionerNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, provisionerNodeAffinityEnv, &corev1.NodeAffinity{})
 
 	if topolvmProvisioner != nil {
-		// get RBD provisioner tolerations and node affinity, defaults to common tolerations and node affinity if not specified
+
 		topolvmProvisionerTolerations := csi.GetToleration(r.opConfig.Parameters, topolvmProvisionerTolerationsEnv, provisionerTolerations)
 		topolvmProvisionerNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, topolvmProvisionerNodeAffinityEnv, provisionerNodeAffinity)
-		// apply RBD provisioner tolerations and node affinity
 		csi.ApplyToPodSpec(&topolvmProvisioner.Spec.Template.Spec, topolvmProvisionerNodeAffinity, topolvmProvisionerTolerations)
 		// apply resource request and limit to rbd provisioner containers
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, topolvmProvisionerResource, &topolvmProvisioner.Spec.Template.Spec)
@@ -157,7 +155,7 @@ func (r *CSITopolvmController) startDrivers(ver *version.Info, ownerInfo *k8suti
 		}
 	}
 	if topolvmCSIDriver != nil {
-		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, topolvmCSIDriver)
+		err = k8sutil.CreateOrUpdateCSIDriver(r.opManagerContext, r.context.Clientset, topolvmCSIDriver)
 		if err != nil {
 			return errors.Wrapf(err, "failed to start topolvm driver %q", topolvmCSIDriver.Name)
 		}
@@ -184,9 +182,7 @@ func (r *CSITopolvmController) updateTopolvmPlugin(deployment *apps.Deployment, 
 		plugin.Name = dep.Name
 		topolvmPluginTolerations := csi.GetToleration(r.opConfig.Parameters, TopolvmPluginTolerationsEnv, pluginTolerations)
 		topolvmPluginNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, TopolvmPluginNodeAffinityEnv, pluginNodeAffinity)
-		// apply RBD provisioner tolerations and node affinity
 		csi.ApplyToPodSpec(&plugin.Spec.Template.Spec, topolvmPluginNodeAffinity, topolvmPluginTolerations)
-		// apply resource request and limit to rbd provisioner containers
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, TopolvmPluginResource, &plugin.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(plugin)
 		if err != nil {

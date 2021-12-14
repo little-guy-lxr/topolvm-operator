@@ -1,5 +1,14 @@
 package csi
 
+const (
+	DefaultRegistrarImage   string = "hello"
+	DefaultProvisionerImage string = "hello"
+	DefaultLivenessImage    string = "hello"
+	DefaultResizerImage     string = "hello"
+	DefaultSnapshotterImage string = "hello"
+	DefaultAttachment       string = "hellop"
+)
+
 type Param struct {
 	RawDeviceImage               string
 	RegistrarImage               string

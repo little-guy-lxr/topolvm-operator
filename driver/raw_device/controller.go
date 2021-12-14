@@ -44,6 +44,9 @@ func (s controllerService) getMaxCapacity(ctx context.Context) (node string, cap
 	}
 
 	for _, ele := range rawDevicelist {
+		if (ele.Status.Name != "") || (!ele.Spec.Available) {
+			continue
+		}
 		if ele.Spec.Size > capacity {
 			capacity = ele.Spec.Size
 			node = ele.Spec.NodeName
@@ -65,7 +68,7 @@ func (s controllerService) createVolume(ctx context.Context, node string, reques
 	var matchSize int64
 
 	for index, dev := range rawDevicelist {
-		if dev.Status.Name != "" {
+		if (dev.Status.Name != "") || (!dev.Spec.Available) {
 			continue
 		}
 		if (dev.Spec.Size >> 30) >= requestGb {
@@ -389,7 +392,7 @@ func (s controllerService) getCapacityByTopologyLabel(ctx context.Context, node 
 	}
 
 	for index, dev := range rawDevicelist {
-		if dev.Status.Name != "" {
+		if dev.Status.Name != "" || !dev.Spec.Available {
 			continue
 		}
 		availableCapacity += dev.Spec.Size

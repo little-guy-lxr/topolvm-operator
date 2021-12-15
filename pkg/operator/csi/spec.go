@@ -7,6 +7,7 @@ const (
 	DefaultResizerImage     string = "hello"
 	DefaultSnapshotterImage string = "hello"
 	DefaultAttachment       string = "hellop"
+	DefaultKubeletDir       string = "/var/lib/kubelet"
 )
 
 type Param struct {

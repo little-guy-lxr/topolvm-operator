@@ -47,8 +47,7 @@ spec:
             - mountPath: /run/topolvm
               name: socket-dir
         - name: csi-provisioner
-          command:
-            - /csi-provisioner
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
             - --enable-capacity
             - --capacity-ownerref-level=2
@@ -57,7 +56,7 @@ spec:
             - --leader-election
             - "--leader-election-namespace={{ .Namespace }}"
           env:
-            - name: POD_NAMESPACE
+            - name: NAMESPACE
               valueFrom:
                 fieldRef:
                   apiVersion: v1
@@ -73,19 +72,17 @@ spec:
             - mountPath: /run/topolvm
               name: socket-dir
         - name: csi-resizer
-          command:
-            - /csi-resizer
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
             - --leader-election
-            - --leader-election-namespace=operators
-          image: build-harbor.alauda.cn/acp/topolvm:v3.6-13-g8b3d6e0
+            - "--leader-election-namespace={{ .Namespace }}"
+          image: {{ .ResizerImage }}
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /run/topolvm
               name: socket-dir
         - name: csi-snapshotter
-          command:
-            - /csi-snapshotter
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
             - --leader-election
             - --leader-election-namespace=operators
@@ -95,8 +92,7 @@ spec:
             - mountPath: /run/topolvm
               name: socket-dir
         - name: liveness-prometheus
-          command:
-            - /livenessprobe
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
           image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent

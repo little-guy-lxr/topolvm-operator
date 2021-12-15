@@ -150,7 +150,7 @@ func (r *CSITopolvmController) setParams() error {
 	CSIParam.LivenessImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_LIVENESS_IMAGE", csi.DefaultLivenessImage)
 	CSIParam.ResizerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_RESIZER_IMAGE", csi.DefaultResizerImage)
 	CSIParam.SnapshotterImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_SNAPSHOTTER_IMAGE", csi.DefaultSnapshotterImage)
-
+	CSIParam.KubeletDirPath = k8sutil.GetValue(r.opConfig.Parameters, "KUBELET_ROOT_DIR", csi.DefaultKubeletDir)
 	return nil
 }
 

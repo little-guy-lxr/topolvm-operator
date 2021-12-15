@@ -15,7 +15,7 @@ spec:
       containers:
         - name: csi-raw-device-plugin
           command:
-            - /raw-device-node
+            - /raw-device-plugin
           env:
             - name: NODE_NAME
               valueFrom:
@@ -60,8 +60,7 @@ spec:
             - mountPath: /registration
               name: registration-dir
         - name: liveness-prometheus
-          command:
-            - /livenessprobe
+          args:
             - --csi-address=/run/raw-device/csi-rawdevice.sock
           image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent
@@ -73,7 +72,7 @@ spec:
               name: node-plugin-dir
       hostPID: true
       restartPolicy: Always
-      serviceAccountName: raw-device-node
+      serviceAccountName: topolvm-raw-device-plugin
       tolerations:
         - operator: Exists
       volumes:
@@ -82,7 +81,7 @@ spec:
             type: Directory
           name: registration-dir
         - hostPath:
-            path: "{{ .KubeletDirPath }}/plugins/localstor.localstor.com/node"
+            path: "{{ .KubeletDirPath }}/plugins/rawdevice.nativestor.io/node"
             type: DirectoryOrCreate
           name: node-plugin-dir
         - hostPath:

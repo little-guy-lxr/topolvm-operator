@@ -75,7 +75,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) \
 		crd:crdVersions=v1 \
 		rbac:roleName=topolvm-global \
-		paths="./apis/...;./controllers" \
+		paths="./apis/...;./pkg/operator/topolvm/controller" \
 		output:crd:artifacts:config=config/crd/bases
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -110,7 +110,7 @@ tools: ## Install tools required for testing.
 ##@ Build
 
 build: fmt vet ## Build topolvm-operator binary.
-	go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/topolvm-operator/main.Version=$(TOPOLVM_OPERATOR_VERSION))"  main.go
+	GOPROXY=https://goproxy.cn go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/topolvm-operator/main.Version=$(TOPOLVM_OPERATOR_VERSION))"  main.go
 
 run: manifests generate fmt vet ## Run a controller from your host (Not Applicable).
 	go run ./main.go
@@ -226,3 +226,7 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+build/raw-device:
+	mkdir -p build
+	GOPROXY=https://goproxy.cn go build -o $@  ./pkg/raw_device/raw_device

@@ -32,6 +32,8 @@ spec:
           spec:
             description: RawDeviceSpec defines the desired state of RawDevice
             properties:
+              available:
+                type: boolean
               major:
                 format: int32
                 type: integer
@@ -39,7 +41,7 @@ spec:
                 format: int32
                 type: integer
               nodeName:
-                description: Foo is an example field of RawDevice. Edit rawdevice_types.go to remove/update
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file'
                 type: string
               realPath:
                 type: string
@@ -51,6 +53,7 @@ spec:
               uuid:
                 type: string
             required:
+            - available
             - major
             - minor
             - nodeName

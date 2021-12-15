@@ -14,17 +14,16 @@ spec:
         app.kubernetes.io/name: raw-device-provisioner
     spec:
       containers:
-        - name: csi-raw-device-plugin
+        - name: csi-raw-device-provisioner
           command:
-            - /raw-device-controller
+            - /raw-device-provisioner
           image: {{ .RawDeviceImage }}
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /run/raw-device
               name: socket-dir
         - name: csi-provisioner
-          command:
-            - /csi-provisioner
+          args:
             - "--v={{ .LogLevel }}"
             - --csi-address=/run/raw-device/csi-rawdevice.sock
             - --enable-capacity
@@ -50,8 +49,7 @@ spec:
             - mountPath: /run/raw-device
               name: socket-dir
         - name: liveness-prometheus
-          command:
-            - /livenessprobe
+          args:
             - --csi-address=/run/raw-device/csi-rawdevice.sock
           image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent
@@ -59,7 +57,7 @@ spec:
             - mountPath: /run/raw-device
               name: socket-dir
       restartPolicy: Always
-      serviceAccountName: raw-device-controller
+      serviceAccountName: topolvm-raw-device-provisioner
       volumes:
         - emptyDir: {}
           name: socket-dir

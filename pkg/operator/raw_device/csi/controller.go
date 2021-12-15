@@ -149,6 +149,7 @@ func (r *CSIRawDeviceController) setParams() error {
 	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", csi.DefaultRegistrarImage)
 	CSIParam.ProvisionerImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_PROVISIONER_IMAGE", csi.DefaultProvisionerImage)
 	CSIParam.LivenessImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_LIVENESS_IMAGE", csi.DefaultLivenessImage)
+	CSIParam.KubeletDirPath = k8sutil.GetValue(r.opConfig.Parameters, "KUBELET_ROOT_DIR", csi.DefaultKubeletDir)
 
 	return nil
 }

@@ -71,8 +71,7 @@ spec:
               mountPropagation: Bidirectional
               name: csi-plugin-dir
         - name: driver-registrar
-          command:
-            - /csi-node-driver-registrar
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
             - "--kubelet-registration-path={{ .KubeletDirPath }}/plugins/topolvm.cybozu.com/node/csi-topolvm.sock"
           image: {{ .RegistrarImage }}
@@ -90,8 +89,7 @@ spec:
             - mountPath: /registration
               name: registration-dir
         - name: liveness-prometheus
-          command:
-            - /livenessprobe
+          args:
             - --csi-address=/run/topolvm/csi-topolvm.sock
           image: {{ .LivenessImage }}
           imagePullPolicy: IfNotPresent

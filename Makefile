@@ -110,7 +110,7 @@ tools: ## Install tools required for testing.
 ##@ Build
 
 build: fmt vet ## Build topolvm-operator binary.
-	GOPROXY=https://goproxy.cn go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/topolvm-operator/main.Version=$(TOPOLVM_OPERATOR_VERSION))"  main.go
+	go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/topolvm-operator/main.Version=$(TOPOLVM_OPERATOR_VERSION))"  main.go
 
 run: manifests generate fmt vet ## Run a controller from your host (Not Applicable).
 	go run ./main.go

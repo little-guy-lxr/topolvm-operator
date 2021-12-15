@@ -4,7 +4,7 @@ FROM golang:1.16 AS builder
 ARG TOPOLVM_OPERATOR_VERSION
 COPY . /workdir
 WORKDIR /workdir
-RUN export GOPROXY=https://goproxy.cn && make build TOPOLVM_OPERATOR_VERSION=${TOPOLVM_OPERATOR_VERSION}
+RUN make build TOPOLVM_OPERATOR_VERSION=${TOPOLVM_OPERATOR_VERSION}
 
 FROM ubuntu:21.04
 RUN apt-get update && apt-get -y install gdisk udev

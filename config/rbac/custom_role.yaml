@@ -44,6 +44,9 @@ rules:
       - create
       - update
       - delete
+  - apiGroups: [ "rawdevice.nativestor.io" ]
+    resources: [ "rawdevices", "rawdevices/status" ]
+    verbs: [ "get", "list", "watch", "create", "update", "delete", "patch" ]
   - apiGroups:
       - storage.k8s.io
     resources:

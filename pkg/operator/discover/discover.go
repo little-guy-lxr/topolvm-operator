@@ -312,7 +312,12 @@ func (m *DeviceManager) updateDeviceCM() error {
 	logger.Infof("updating device configmap")
 	devices, err := sys.GetAllDevices(m.context)
 	if err != nil {
-		logger.Errorf("can not list disk err:%s", err)
+		logger.Errorf("can not list disk err:%v", err)
+		return err
+	}
+	err = m.createOrUpdateRawDevice(devices)
+	if err != nil {
+		logger.Errorf("can not create or update raw device err:%v", err)
 		return err
 	}
 	deviceJSON, err := json.Marshal(devices)

@@ -170,7 +170,7 @@ func (r *CSIRawDeviceController) startDrivers(ver *version.Info, ownerInfo *k8su
 	}
 
 	if rawDeviceCSIDriver != nil {
-		err = k8sutil.CreateOrUpdateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeviceCSIDriver)
+		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, rawDeviceCSIDriver)
 		if err != nil {
 			return errors.Wrapf(err, "failed to start raw device driver %q", rawDeviceProvisioner.Name)
 		}

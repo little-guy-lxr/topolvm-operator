@@ -64,6 +64,11 @@ func (l *lvmdConfigController) onAdd(obj interface{}) {
 		return
 	}
 
+	if l.topolvmController.getRef() == nil {
+		lvmdLogger.Info("waiting fot topolvm cluster created")
+		return
+	}
+
 	cm.ObjectMeta.OwnerReferences = []metav1.OwnerReference{*l.topolvmController.getRef()}
 	_, err = l.topolvmController.context.Clientset.CoreV1().ConfigMaps(cm.Namespace).Update(l.topolvmController.opManagerContext, cm, metav1.UpdateOptions{})
 	if err != nil {
@@ -118,6 +123,10 @@ func (l *lvmdConfigController) onUpdate(oldObj, newobj interface{}) {
 		return
 	}
 
+	if l.topolvmController.getRef() == nil {
+		lvmdLogger.Info("waiting for topolvm cluster created")
+		return
+	}
 	if newCm.OwnerReferences == nil {
 		newCm.ObjectMeta.OwnerReferences = []metav1.OwnerReference{*l.topolvmController.getRef()}
 		_, err = l.topolvmController.context.Clientset.CoreV1().ConfigMaps(newCm.Namespace).Update(l.topolvmController.opManagerContext, newCm, metav1.UpdateOptions{})
@@ -265,6 +274,10 @@ func (l *lvmdConfigController) createTopolvmPluginNodeDeployment(node string) er
 
 	param := csi.Param{}
 	param.TopolvmImage = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "TOPOLVM_IMAGE", csitopo.DefaultTopolvmImage)
+	param.RegistrarImage = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", csi.DefaultRegistrarImage)
+	param.LivenessImage = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "CSI_LIVENESS_IMAGE", csi.DefaultLivenessImage)
+	param.KubeletDirPath = k8sutil.GetValue(l.topolvmController.opConfig.Parameters, "KUBELET_ROOT_DIR", csi.DefaultKubeletDir)
+
 	tp := csi.TemplateParam{
 		Param:     param,
 		Namespace: l.topolvmController.opConfig.OperatorNamespace,
@@ -286,6 +299,9 @@ func (l *lvmdConfigController) createTopolvmPluginNodeDeployment(node string) er
 	}
 	topolvmPlugin.Spec.Template.Spec.NodeSelector = nodeSelector
 	topolvmPlugin.OwnerReferences = []metav1.OwnerReference{*l.topolvmController.getRef()}
+	lvmdName := k8sutil.TruncateNodeName(topolvm.LvmdConfigMapFmt, node)
+	v := v1.Volume{Name: "lvmd-config-dir", VolumeSource: v1.VolumeSource{ConfigMap: &v1.ConfigMapVolumeSource{LocalObjectReference: v1.LocalObjectReference{Name: lvmdName}}}}
+	topolvmPlugin.Spec.Template.Spec.Volumes = append(topolvmPlugin.Spec.Template.Spec.Volumes, v)
 	_, err = k8sutil.CreateOrUpdateDeployment(l.topolvmController.opManagerContext, l.topolvmController.context.Clientset, topolvmPlugin)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update topolvm provisioner deployment %q", topolvmPlugin.Name)

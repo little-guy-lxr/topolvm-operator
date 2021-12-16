@@ -127,6 +127,8 @@ func (r *TopolvmController) reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, errors.Wrapf(err, "failed to get controller %q owner reference", topolvmCluster.Name)
 	}
 
+	r.updateRef(ref)
+
 	if err := r.checkStorageConfig(topolvmCluster); err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "check storage config failed")
 	}
@@ -335,18 +337,10 @@ func (r *TopolvmController) UpdateStatus(state *topolvmv2.NodeStorageState) erro
 }
 
 func (r *TopolvmController) UseAllNodeAndDevices() bool {
-	return r.cluster.Spec.UseAllNodes
+	return r.getCluster().Spec.UseAllNodes
 }
 
 func (r *TopolvmController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
-
-	if r.cluster == nil {
-		r.lvmdController.start()
-		err := r.startClusterMonitor()
-		if err != nil {
-			return errors.Wrap(err, "start cluster monitor failed")
-		}
-	}
 
 	if topolvm.IsOperatorHub {
 
@@ -366,7 +360,16 @@ func (r *TopolvmController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref 
 		return errors.Wrap(err, "start prepare volume group failed")
 	}
 
-	r.cluster = topolvmCluster.DeepCopy()
+	if r.cluster == nil {
+		r.updateCluster(topolvmCluster.DeepCopy())
+		r.lvmdController.start()
+		err := r.startClusterMonitor()
+		if err != nil {
+			return errors.Wrap(err, "start cluster monitor failed")
+		}
+	}
+
+	r.updateCluster(topolvmCluster.DeepCopy())
 
 	return nil
 
@@ -425,6 +428,18 @@ func (r *TopolvmController) startPrepareVolumeGroupJob(topolvmCluster *topolvmv2
 func (r *TopolvmController) RestartJob(node string, ref *metav1.OwnerReference) error {
 
 	return volumegroup.MakeAndRunJob(r.context.Clientset, node, r.opConfig.Image, ref)
+}
+
+func (r *TopolvmController) updateCluster(c *topolvmv2.TopolvmCluster) {
+	r.refLock.Lock()
+	defer r.refLock.Unlock()
+	r.cluster = c
+}
+
+func (r *TopolvmController) getCluster() *topolvmv2.TopolvmCluster {
+	r.refLock.Lock()
+	defer r.refLock.Unlock()
+	return r.cluster.DeepCopy()
 }
 
 func (r *TopolvmController) updateRef(ref *metav1.OwnerReference) {

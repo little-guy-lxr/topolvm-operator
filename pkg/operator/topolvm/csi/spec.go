@@ -2,6 +2,7 @@ package csi
 
 import (
 	_ "embed"
+	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
 	"github.com/alauda/topolvm-operator/pkg/operator/csi"
 	"github.com/alauda/topolvm-operator/pkg/operator/k8sutil"
 	"github.com/pkg/errors"
@@ -155,7 +156,7 @@ func (r *CSITopolvmController) startDrivers(ver *version.Info, ownerInfo *k8suti
 		}
 	}
 	if topolvmCSIDriver != nil {
-		err = k8sutil.CreateOrUpdateCSIDriver(r.opManagerContext, r.context.Clientset, topolvmCSIDriver)
+		err = k8sutil.CreateCSIDriver(r.opManagerContext, r.context.Clientset, topolvmCSIDriver)
 		if err != nil {
 			return errors.Wrapf(err, "failed to start topolvm driver %q", topolvmCSIDriver.Name)
 		}
@@ -180,6 +181,9 @@ func (r *CSITopolvmController) updateTopolvmPlugin(deployment *apps.Deployment, 
 		plugin := deployment.DeepCopy()
 		plugin.Spec.Template.Spec.NodeSelector = dep.Spec.Template.Spec.NodeSelector
 		plugin.Name = dep.Name
+		lvmdName := k8sutil.TruncateNodeName(topolvm.LvmdConfigMapFmt, plugin.Spec.Template.Spec.NodeSelector[corev1.LabelHostname])
+		v := corev1.Volume{Name: "lvmd-config-dir", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: lvmdName}}}}
+		plugin.Spec.Template.Spec.Volumes = append(plugin.Spec.Template.Spec.Volumes, v)
 		topolvmPluginTolerations := csi.GetToleration(r.opConfig.Parameters, TopolvmPluginTolerationsEnv, pluginTolerations)
 		topolvmPluginNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, TopolvmPluginNodeAffinityEnv, pluginNodeAffinity)
 		csi.ApplyToPodSpec(&plugin.Spec.Template.Spec, topolvmPluginNodeAffinity, topolvmPluginTolerations)
@@ -188,7 +192,7 @@ func (r *CSITopolvmController) updateTopolvmPlugin(deployment *apps.Deployment, 
 		if err != nil {
 			return errors.Wrapf(err, "failed to set owner reference to topolvm plugin deployment %q", plugin.Name)
 		}
-		_, err = k8sutil.CreateOrUpdateDeployment(r.opManagerContext, r.context.Clientset, &dep)
+		_, err = k8sutil.CreateOrUpdateDeployment(r.opManagerContext, r.context.Clientset, plugin)
 		if err != nil {
 			return errors.Wrapf(err, "failed to update topolvm provisioner deployment %q", plugin.Name)
 		}

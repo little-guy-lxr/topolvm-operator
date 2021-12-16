@@ -102,6 +102,7 @@ func CreateOrUpdateDeployment(ctx context.Context, clientset kubernetes.Interfac
 			newDep, err = clientset.AppsV1().Deployments(dep.Namespace).Update(ctx, dep, metav1.UpdateOptions{})
 		}
 		if err != nil {
+			logger.Errorf("CreateOrUpdateDeployment failed deploy %s, err %v", dep.Name, err)
 			return nil, errors.Wrapf(err, "failed to create or update deployment %q: %+v", dep.Name, dep)
 		}
 	}

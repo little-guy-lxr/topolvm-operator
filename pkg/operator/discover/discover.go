@@ -191,9 +191,10 @@ func lookupRawDevices(disk *sys.LocalDiskAppendInfo, rawDevices []*rawapi.RawDev
 }
 
 func convertDiskToRawDevice(nodeName string, disk *sys.LocalDiskAppendInfo) *rawapi.RawDevice {
+
 	return &rawapi.RawDevice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: disk.UUID,
+			Name: k8sutil.Hash(nodeName + disk.RealPath),
 			Labels: map[string]string{
 				"node": nodeName,
 			},

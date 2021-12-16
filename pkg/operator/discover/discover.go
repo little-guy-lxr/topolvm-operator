@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/alauda/topolvm-operator/pkg/cluster/topolvm"
-	"k8s.io/apimachinery/pkg/labels"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -170,53 +169,12 @@ func (m *DeviceManager) Run() error {
 
 func (m *DeviceManager) createOrUpdateRawDevice(devices []*sys.LocalDiskAppendInfo) error {
 
-	set := labels.Set{"node": m.nodeName}
-	rawDevicelist, err := m.rawDeviceLister.List(labels.SelectorFromSet(set))
-	if err != nil {
-		return err
-	}
-
+	ctx := context.TODO()
 	for _, disk := range devices {
-		if disk.Available {
-			found, index := lookupRawDevices(disk, rawDevicelist)
-			if found {
-				if rawDevicelist[index].Status.Name == "" {
-					if !rawDevicelist[index].Spec.Available {
-						//update available
-						raw := rawDevicelist[index].DeepCopy()
-						raw.Spec.Available = true
-						_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Update(context.TODO(), raw, metav1.UpdateOptions{})
-						if err != nil {
-							logger.Errorf("update raw device %s failed err %v", raw.Name, err)
-						}
-					}
-				}
-
-			} else {
-				raw := convertDiskToRawDevice(m.nodeName, disk)
-
-				_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Create(context.TODO(), raw, metav1.CreateOptions{})
-				if err != nil {
-					logger.Errorf("create raw device %s failed err %v", raw.Name, err)
-				}
-			}
-
-		} else {
-			found, index := lookupRawDevices(disk, rawDevicelist)
-			if found {
-				if rawDevicelist[index].Status.Name == "" {
-					//update available to false
-					if rawDevicelist[index].Spec.Available {
-						raw := rawDevicelist[index].DeepCopy()
-						raw.Spec.Available = false
-						_, err = m.context.RawDeviceClientset.RawdeviceV1().RawDevices().Update(context.TODO(), raw, metav1.UpdateOptions{})
-						if err != nil {
-							logger.Errorf("update raw device %s failed err %v", raw.Name, err)
-						}
-					}
-
-				}
-			}
+		device := convertDiskToRawDevice(m.nodeName, disk)
+		_, err := k8sutil.CreateOrUpdateRawDevice(ctx, m.context.RawDeviceClientset, device)
+		if err != nil {
+			logger.Errorf("create raw device %s failed err %v", device.Name, err)
 		}
 	}
 

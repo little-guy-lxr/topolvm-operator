@@ -18,7 +18,7 @@ package cluster
 
 import (
 	"fmt"
-	rawclinet "github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/clientset/versioned"
+	rawclient "github.com/alauda/topolvm-operator/generated/nativestore/rawdevice/clientset/versioned"
 	"os"
 
 	topolvmclient "github.com/alauda/topolvm-operator/generated/nativestore/topolvm/clientset/versioned"
@@ -47,7 +47,7 @@ type Context struct {
 	// Clientset is a connection to the core kubernetes API
 	Clientset kubernetes.Interface
 
-	RawDeviceClientset rawclinet.Interface
+	RawDeviceClientset rawclient.Interface
 
 	TopolvmClusterClientset topolvmclient.Interface
 

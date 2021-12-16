@@ -24,13 +24,13 @@ const (
 	provisionerNodeAffinityEnv              = "CSI_PROVISIONER_NODE_AFFINITY"
 	pluginTolerationsEnv                    = "CSI_PROVISIONER_TOLERATIONS"
 	pluginNodeAffinityEnv                   = "CSI_PROVISIONER_NODE_AFFINITY"
-	topolvmProvisionerTolerationsEnv        = "TOPOLVM_PROVISIONER_TOLERATIONS"
-	topolvmProvisionerNodeAffinityEnv       = "TOPOLVM_PROVISIONER_NODE_AFFINITY"
-	TopolvmPluginTolerationsEnv             = "TOPOLVM_PLUGIN_TOLERATIONS"
-	TopolvmPluginNodeAffinityEnv            = "TOPOLVM_PLUGIN_NODE_AFFINITY"
+	topolvmProvisionerTolerationsEnv        = "CSI_TOPOLVM_PROVISIONER_TOLERATIONS"
+	topolvmProvisionerNodeAffinityEnv       = "CSI_TOPOLVM_PROVISIONER_NODE_AFFINITY"
+	TopolvmPluginTolerationsEnv             = "CSI_TOPOLVM_PLUGIN_TOLERATIONS"
+	TopolvmPluginNodeAffinityEnv            = "CSI_TOPOLVM_PLUGIN_NODE_AFFINITY"
 
-	topolvmProvisionerResource = "TOPOLVM_PROVISIONER_RESOURCE"
-	TopolvmPluginResource      = "TOPOLVM_PLUGIN_RESOURCE"
+	topolvmProvisionerResource = "CSI_TOPOLVM_PROVISIONER_RESOURCE"
+	TopolvmPluginResource      = "CSI_TOPOLVM_PLUGIN_RESOURCE"
 	// default provisioner replicas
 	defaultProvisionerReplicas int32 = 2
 

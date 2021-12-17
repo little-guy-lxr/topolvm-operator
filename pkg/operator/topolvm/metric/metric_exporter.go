@@ -22,18 +22,23 @@ type metricsExporter struct {
 var _ manager.LeaderElectionRunnable = &metricsExporter{}
 
 func (m metricsExporter) Start(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case met := <-m.updater:
-			fmt.Println("metric coming")
-			m.clusterStatus.WithLabelValues(met.Cluster).Set(float64(met.ClusterStatus))
-			for _, ele := range met.NodeStatus {
-				m.nodeStatus.WithLabelValues(ele.Node).Set(float64(ele.Status))
+
+	go func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case met := <-m.updater:
+				fmt.Println("metric coming")
+				m.clusterStatus.WithLabelValues(met.Cluster).Set(float64(met.ClusterStatus))
+				for _, ele := range met.NodeStatus {
+					m.nodeStatus.WithLabelValues(ele.Node).Set(float64(ele.Status))
+				}
 			}
 		}
-	}
+	}()
+
+	return nil
 }
 
 // NeedLeaderElection implements controller-runtime's manager.LeaderElectionRunnable.

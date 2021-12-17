@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 
+	rawv1 "github.com/alauda/topolvm-operator/apis/rawdevice/v1"
 	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/cmd/topolvm"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
@@ -61,12 +62,13 @@ func init() {
 func addScheme() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = topolvmv2.AddToScheme(scheme)
+	_ = rawv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
 var AddToManagerFuncs = []func(manager.Manager, *cluster.Context, context.Context, operator.OperatorConfig) error{
-	rawdev_csi.Add,
 	topolvmctr.Add,
+	rawdev_csi.Add,
 	topolvm_csi.Add,
 }
 

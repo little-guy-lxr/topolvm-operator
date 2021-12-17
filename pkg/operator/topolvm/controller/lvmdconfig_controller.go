@@ -52,7 +52,7 @@ func newLvmdController(topolvmController *TopolvmController) *lvmdConfigControll
 }
 
 func (l *lvmdConfigController) start() {
-	l.lvmdController.Run(l.topolvmController.opManagerContext.Done())
+	go l.lvmdController.Run(l.topolvmController.opManagerContext.Done())
 }
 
 func (l *lvmdConfigController) onAdd(obj interface{}) {

@@ -19,12 +19,11 @@ const (
 	port               = "metrics"
 )
 
-func EnableServiceMonitor(ref *metav1.OwnerReference) error {
+func EnableServiceMonitor() error {
 	serviceMonitor := monitoringv1.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            serviceMonitorName,
-			Namespace:       topolvm.NameSpace,
-			OwnerReferences: []metav1.OwnerReference{*ref},
+			Name:      serviceMonitorName,
+			Namespace: topolvm.NameSpace,
 			Labels: map[string]string{
 				"prometheus": "kube-prometheus",
 			},
@@ -49,13 +48,12 @@ func EnableServiceMonitor(ref *metav1.OwnerReference) error {
 	return nil
 }
 
-func CreateOrUpdatePrometheusRule(ref *metav1.OwnerReference) error {
+func CreateOrUpdatePrometheusRule() error {
 	var rule monitoringv1.PrometheusRule
 	err := k8sYAML.NewYAMLOrJSONDecoder(bytes.NewBufferString(PrometheusRule), 1000).Decode(&rule)
 	if err != nil {
 		return fmt.Errorf("prometheusRules could not be decoded. %v", err)
 	}
-	rule.OwnerReferences = []metav1.OwnerReference{*ref}
 	rule.Namespace = topolvm.NameSpace
 	_, err = k8sutil.CreateOrUpdatePrometheusRule(&rule)
 	return err

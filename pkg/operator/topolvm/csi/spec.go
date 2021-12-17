@@ -132,7 +132,6 @@ func (r *CSITopolvmController) startDrivers(ver *version.Info, ownerInfo *k8suti
 		topolvmProvisionerTolerations := csi.GetToleration(r.opConfig.Parameters, topolvmProvisionerTolerationsEnv, provisionerTolerations)
 		topolvmProvisionerNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, topolvmProvisionerNodeAffinityEnv, provisionerNodeAffinity)
 		csi.ApplyToPodSpec(&topolvmProvisioner.Spec.Template.Spec, topolvmProvisionerNodeAffinity, topolvmProvisionerTolerations)
-		// apply resource request and limit to rbd provisioner containers
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, topolvmProvisionerResource, &topolvmProvisioner.Spec.Template.Spec)
 		err = ownerInfo.SetControllerReference(topolvmProvisioner)
 		if err != nil {
@@ -188,7 +187,6 @@ func (r *CSITopolvmController) updateTopolvmPlugin(deployment *apps.Deployment, 
 		topolvmPluginNodeAffinity := csi.GetNodeAffinity(r.opConfig.Parameters, TopolvmPluginNodeAffinityEnv, pluginNodeAffinity)
 		csi.ApplyToPodSpec(&plugin.Spec.Template.Spec, topolvmPluginNodeAffinity, topolvmPluginTolerations)
 		csi.ApplyResourcesToContainers(r.opConfig.Parameters, TopolvmPluginResource, &plugin.Spec.Template.Spec)
-		err = ownerInfo.SetControllerReference(plugin)
 		if err != nil {
 			return errors.Wrapf(err, "failed to set owner reference to topolvm plugin deployment %q", plugin.Name)
 		}

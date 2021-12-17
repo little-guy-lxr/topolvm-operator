@@ -32,8 +32,6 @@ var (
 	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "raw-device-csi")
 )
 
-// Add creates a new Ceph CSI Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
 func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig operator.OperatorConfig) error {
 	return add(mgr, newReconciler(mgr, context, opManagerContext, opConfig))
 }
@@ -129,10 +127,9 @@ func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *vers
 				break
 			}
 		}
+
 		return errors.Wrap(err, "failed to start raw device csi drivers")
 	}
-
-	// Check whether RBD or CephFS needs to be disabled
 	r.stopDrivers(serverVersion)
 
 	return nil
@@ -141,8 +138,8 @@ func (r *CSIRawDeviceController) validateAndConfigureDrivers(serverVersion *vers
 func (r *CSIRawDeviceController) setParams() error {
 	var err error
 
-	if EnableRawDevice, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "ENABLE_RAW_DEVICE", "false")); err != nil {
-		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_ENABLE_RAW_DEVICE'")
+	if EnableRawDevice, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "RAW_DEVICE_ENABLE", "false")); err != nil {
+		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_RAW_DEVICE_ENABLE'")
 	}
 
 	CSIParam.RawDeviceImage = k8sutil.GetValue(r.opConfig.Parameters, "RAW_DEVICE_IMAGE", DefaultRawDevicePluginImage)

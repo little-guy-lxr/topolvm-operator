@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	logger = capnslog.NewPackageLogger("github.com/rook/rook", "ceph-csi")
+	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "csi")
 )
 
 func loadTemplate(name, templateData string, p TemplateParam) ([]byte, error) {
@@ -119,10 +119,10 @@ func ApplyResourcesToContainers(opConfig map[string]string, key string, podspec 
 func getComputeResource(opConfig map[string]string, key string) []k8sutil.ContainerResource {
 	// Add Resource list if any
 	resource := []k8sutil.ContainerResource{}
-	resourceRaw := ""
+	resourceRaw := k8sutil.GetValue(opConfig, key, "")
 	var err error
 
-	if k8sutil.GetValue(opConfig, key, "") != "" {
+	if resourceRaw != "" {
 		resource, err = k8sutil.YamlToContainerResource(resourceRaw)
 		if err != nil {
 			logger.Warningf("failed to parse %q. %v", resourceRaw, err)

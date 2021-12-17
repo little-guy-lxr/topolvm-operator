@@ -9,8 +9,7 @@ type OperatorConfig struct {
 }
 
 const (
-	// OperatorSettingConfigMapName refers to ConfigMap that configures rook ceph operator
 	OperatorSettingConfigMapName string = "topolvm-operator-setting"
-	EnableRawDeviceEnv           string = "ENABLE_RAW_DEVICE"
+	EnableRawDeviceEnv           string = "RAW_DEVICE_ENABLE"
 	DiscoverAppName              string = "discover-device"
 )

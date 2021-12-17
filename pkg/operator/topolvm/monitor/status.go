@@ -54,11 +54,11 @@ func (c *ClusterStatusChecker) CheckClusterStatus() {
 
 		case <-time.After(c.interval):
 			c.checkStatus()
-			if err := EnableServiceMonitor(nil); err != nil {
+			if err := EnableServiceMonitor(); err != nil {
 				logger.Errorf("monitor failed err %s", err.Error())
 			}
 
-			if err := CreateOrUpdatePrometheusRule(nil); err != nil {
+			if err := CreateOrUpdatePrometheusRule(); err != nil {
 				logger.Errorf("create rule failed err %s", err.Error())
 			}
 		}
@@ -67,6 +67,7 @@ func (c *ClusterStatusChecker) CheckClusterStatus() {
 
 func (c *ClusterStatusChecker) checkStatus() {
 
+	logger.Info("check and update topolvm cluster status")
 	ctx := context.TODO()
 	pods, err := c.context.Clientset.CoreV1().Pods(topolvm.NameSpace).List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", topolvm.TopolvmComposeAttr, topolvm.TopolvmComposeNode)})
 	if err != nil && !kerrors.IsNotFound(err) {

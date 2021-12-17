@@ -2,7 +2,6 @@ package csi
 
 import (
 	"context"
-	topolvmv2 "github.com/alauda/topolvm-operator/apis/topolvm/v2"
 	"github.com/alauda/topolvm-operator/pkg/cluster"
 	"github.com/alauda/topolvm-operator/pkg/operator"
 	controllerutil "github.com/alauda/topolvm-operator/pkg/operator/controller"
@@ -33,8 +32,6 @@ var (
 	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "topolvm-csi")
 )
 
-// Add creates a new Ceph CSI Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
 func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig operator.OperatorConfig) error {
 	return add(mgr, newReconciler(mgr, context, opManagerContext, opConfig))
 }
@@ -141,8 +138,8 @@ func (r *CSITopolvmController) validateAndConfigureDrivers(serverVersion *versio
 func (r *CSITopolvmController) setParams() error {
 	var err error
 
-	if EnableTopolvm, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "ENABLE_TOPOLVM", "false")); err != nil {
-		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_ENABLE_TOPOLVM'")
+	if EnableTopolvm, err = strconv.ParseBool(k8sutil.GetValue(r.opConfig.Parameters, "TOPOLVM_ENABLE", "false")); err != nil {
+		return errors.Wrap(err, "unable to parse value for 'OPERATOR_CSI_TOPOLVM_ENABLE'")
 	}
 	CSIParam.TopolvmImage = k8sutil.GetValue(r.opConfig.Parameters, "TOPOLVM_IMAGE", DefaultTopolvmImage)
 	CSIParam.RegistrarImage = k8sutil.GetValue(r.opConfig.Parameters, "CSI_REGISTRAR_IMAGE", csi.DefaultRegistrarImage)
@@ -165,13 +162,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for ConfigMap (operator config)
 	err = c.Watch(&source.Kind{
 		Type: &v1.ConfigMap{TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: v1.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
-	if err != nil {
-		return err
-	}
-
-	// Watch for CephCluster
-	err = c.Watch(&source.Kind{
-		Type: &topolvmv2.TopolvmCluster{TypeMeta: metav1.TypeMeta{Kind: "TopolvmCluster", APIVersion: v1.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
 	if err != nil {
 		return err
 	}

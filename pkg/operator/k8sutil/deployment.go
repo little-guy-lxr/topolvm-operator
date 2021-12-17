@@ -131,7 +131,7 @@ func GetDeploymentOwnerReference(ctx context.Context, clientset kubernetes.Inter
 		}
 	}
 	if deploymentRef == nil {
-		return nil, errors.New("could not find owner reference for rook-ceph deployment")
+		return nil, errors.New("could not find owner reference for deployment")
 	}
 	return deploymentRef, nil
 }

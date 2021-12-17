@@ -45,8 +45,6 @@ var (
 	logger = capnslog.NewPackageLogger("github.com/alauda/topolvm-operator", "topolvm-controller")
 )
 
-// Add creates a new Ceph CSI Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
 func Add(mgr manager.Manager, context *cluster.Context, opManagerContext context.Context, opConfig operator.OperatorConfig) error {
 
 	metricsCh := make(chan *topolvm.Metrics)
@@ -126,14 +124,10 @@ func (r *TopolvmController) reconcile(request reconcile.Request) (reconcile.Resu
 	if err != nil || ref == nil {
 		return reconcile.Result{}, errors.Wrapf(err, "failed to get controller %q owner reference", topolvmCluster.Name)
 	}
-
 	r.updateRef(ref)
-
 	if err := r.checkStorageConfig(topolvmCluster); err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "check storage config failed")
 	}
-
-	// Do reconcile here!
 	if err := r.onAdd(topolvmCluster, ref); err != nil {
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile cluster %q", topolvmCluster.Name)
 	}
@@ -144,7 +138,6 @@ func (r *TopolvmController) reconcile(request reconcile.Request) (reconcile.Resu
 func (r *TopolvmController) reconcileDelete(topolvmCluster *topolvmv2.TopolvmCluster) error {
 
 	nsName := r.namespacedName
-
 	logger.Infof("deleting topolvm cluster %q", topolvmCluster.Name)
 	r.stopCheckClusterStatus()
 	// Remove finalizer
@@ -152,8 +145,7 @@ func (r *TopolvmController) reconcileDelete(topolvmCluster *topolvmv2.TopolvmClu
 	if err != nil {
 		return errors.Wrap(err, "failed to remove finalize")
 	}
-
-	r.cluster = nil
+	r.updateCluster(nil)
 	err = r.cleanCluster()
 	if err != nil {
 		return errors.Wrap(err, "clean cluster failed")
@@ -163,7 +155,6 @@ func (r *TopolvmController) reconcileDelete(topolvmCluster *topolvmv2.TopolvmClu
 }
 
 func (r *TopolvmController) startClusterMonitor() error {
-
 	if r.health == nil {
 		internalCtx, internalCancel := context.WithCancel(r.opManagerContext)
 		r.health = &clusterHealth{
@@ -172,16 +163,18 @@ func (r *TopolvmController) startClusterMonitor() error {
 		}
 
 		r.statusChecker = monitor.NewStatusChecker(r.health.internalCtx, r.context, &r.statusLock, r.metric, r.namespacedName)
-		r.statusChecker.CheckClusterStatus()
+		go r.statusChecker.CheckClusterStatus()
 	}
 
 	return nil
 }
 
 func (r *TopolvmController) stopCheckClusterStatus() {
-	if r.health.internalCtx.Err() == nil {
-		r.health.internalCancel()
-		r.health = nil
+	if r.health != nil {
+		if r.health.internalCtx.Err() == nil {
+			r.health.internalCancel()
+			r.health = nil
+		}
 	}
 }
 
@@ -250,9 +243,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 	logger.Infof("%s successfully started", controllerName)
 
-	// Watch for CephCluster
 	err = c.Watch(&source.Kind{
-		Type: &topolvmv2.TopolvmCluster{TypeMeta: metav1.TypeMeta{Kind: "TopolvmCluster", APIVersion: v1.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
+		Type: &topolvmv2.TopolvmCluster{TypeMeta: metav1.TypeMeta{Kind: "TopolvmCluster", APIVersion: topolvmv2.SchemeGroupVersion.String()}}}, &handler.EnqueueRequestForObject{}, predicateController())
 	if err != nil {
 		return err
 	}
@@ -341,7 +333,6 @@ func (r *TopolvmController) UseAllNodeAndDevices() bool {
 }
 
 func (r *TopolvmController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
-
 	if topolvm.IsOperatorHub {
 
 		err := csidriver.CheckTopolvmCsiDriverExisting(r.context.Clientset, ref)
@@ -360,7 +351,7 @@ func (r *TopolvmController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref 
 		return errors.Wrap(err, "start prepare volume group failed")
 	}
 
-	if r.cluster == nil {
+	if r.getCluster() == nil {
 		r.updateCluster(topolvmCluster.DeepCopy())
 		r.lvmdController.start()
 		err := r.startClusterMonitor()
@@ -378,9 +369,8 @@ func (r *TopolvmController) onAdd(topolvmCluster *topolvmv2.TopolvmCluster, ref 
 func (r *TopolvmController) startPrepareVolumeGroupJob(topolvmCluster *topolvmv2.TopolvmCluster, ref *metav1.OwnerReference) error {
 
 	storage := topolvmCluster.Spec.Storage
-
 	// if device class not change then check if has fail class that should be recreate
-	if r.cluster != nil && reflect.DeepEqual(r.cluster.Spec.Storage, storage) {
+	if r.getCluster() != nil && reflect.DeepEqual(r.getCluster().DeepCopy().Spec.Storage, storage) {
 		go func() {
 			for _, ele := range topolvmCluster.Status.NodeStorageStatus {
 				if len(ele.FailClasses) > 0 || len(ele.SuccessClasses) == 0 {
@@ -396,23 +386,21 @@ func (r *TopolvmController) startPrepareVolumeGroupJob(topolvmCluster *topolvmv2
 		return nil
 	}
 
-	if topolvmCluster.Spec.UseAllNodes {
-		nodes, err := r.context.Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			logger.Errorf("list node failed err %v", err)
-			return err
-		}
-		for _, ele := range nodes.Items {
-			if err := volumegroup.MakeAndRunJob(r.context.Clientset, ele.Name, r.opConfig.Image, ref); err != nil {
-				logger.Errorf("create job for node failed %s", ele.Name)
-			}
-		}
-		return nil
-	}
-
 	// first should create job anyway
 	logger.Info("start make prepare volume group job")
 	go func() {
+		if topolvmCluster.Spec.UseAllNodes {
+			nodes, err := r.context.Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+			if err != nil {
+				logger.Errorf("list node failed err %v", err)
+			}
+			for _, ele := range nodes.Items {
+				if err := volumegroup.MakeAndRunJob(r.context.Clientset, ele.Name, r.opConfig.Image, ref); err != nil {
+					logger.Errorf("create job for node failed %s", ele.Name)
+				}
+			}
+		}
+
 		if storage.DeviceClasses != nil {
 			for _, ele := range storage.DeviceClasses {
 				if err := volumegroup.MakeAndRunJob(r.context.Clientset, ele.NodeName, r.opConfig.Image, ref); err != nil {

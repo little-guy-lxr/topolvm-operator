@@ -66,12 +66,11 @@ func predicateController() predicate.Funcs {
 }
 
 func findCSIChange(str string) bool {
-	var re = regexp.MustCompile(`(?m)^(\+|-).*(\"RAW_DEVICE|\"CSI_).*,$`)
+	var re = regexp.MustCompile(`\"RAW_DEVICE_|\"CSI_|\"KUBELET_.`)
 	found := re.FindAllString(str, -1)
 	if len(found) > 0 {
 		for _, match := range found {
-			// logger.Debugf("ceph csi config changed with: %q", match)
-			logger.Infof("raw-devie csi config changed with: %q", match)
+			logger.Infof("raw-device csi config changed with: %q", match)
 		}
 		return true
 	}

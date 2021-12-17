@@ -34,9 +34,9 @@ const (
 	// default provisioner replicas
 	defaultProvisionerReplicas int32 = 2
 
-	csiRawDevicePlugin = "csi-raw-device-plugin"
+	csiRawDevicePlugin = "raw-device-plugin"
 
-	csiRawDeviceProvisioner = "csi-raw-device-provisioner"
+	csiRawDeviceProvisioner = "raw-device-provisioner"
 )
 
 var (
@@ -48,7 +48,6 @@ var (
 )
 
 var (
-	// Local package template path for RBD
 	//go:embed template/csi-rawdevice-plugin.yaml
 	CSIRawDeviceNodeTemplatePath string
 	//go:embed template/csi-rawdevice-provisioner.yaml

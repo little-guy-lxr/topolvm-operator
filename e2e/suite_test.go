@@ -89,7 +89,7 @@ var _ = BeforeSuite(func() {
 	Eventually(waitKindnet).Should(Succeed())
 	time.Sleep(2 * time.Second)
 	Eventually(waitKindnet).Should(Succeed())
-	SetDefaultEventuallyTimeout(5 * time.Minute)
+	SetDefaultEventuallyTimeout(10 * time.Minute)
 
 	podYAML := `apiVersion: v1
 kind: Pod
@@ -114,13 +114,13 @@ spec:
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 
 	Eventually(func() error {
-		result, stderr, err := kubectl("get", "-n", "topolvm-system", "pod", "-l", "app=topolvm-operator", "-o", "name")
+		result, stderr, err := kubectl("get", "-n", "nativestor-system", "pod", "-l", "app=topolvm-operator", "-o", "name")
 		if err != nil {
 			return errors.New(string(stderr))
 		}
 		podName := strings.TrimSuffix(string(result), "\n")
 		fmt.Printf("topolvm operator name %s \n", podName)
-		result, stderr, err = kubectl("get", "-n", "topolvm-system", podName, "-o=json")
+		result, stderr, err = kubectl("get", "-n", "nativestor-system", podName, "-o=json")
 		if err != nil {
 			return errors.New(string(stderr))
 		}
@@ -139,6 +139,6 @@ var _ = Describe("TopoLVM", func() {
 	Context("topolvm-controller", testCSIController)
 	Context("topolvm-node", testNode)
 	Context("scheduler", testScheduler)
-	Context("create-loop", testLoop)
-	Context("discover", testDiscover)
+	Context("raw-device", testCSIRawDevice)
+	Context("raw-device-delete", testRawDeviceDelete)
 })

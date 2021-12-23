@@ -36,7 +36,6 @@ import (
 
 type CleanupContext struct {
 	NodeCapacityAnnotations map[string]map[string]string
-	CSICapacity             map[string]*resource.Quantity
 }
 
 func execAtLocal(cmd string, input []byte, args ...string) ([]byte, []byte, error) {
@@ -67,8 +66,6 @@ func commonBeforeEach() CleanupContext {
 
 	cc.NodeCapacityAnnotations, err = getNodeAnnotationMapWithPrefix(topolvm.CapacityKeyPrefix)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
-	cc.CSICapacity, err = getCSICapacity()
-	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	return cc
 }
@@ -87,14 +84,6 @@ func commonAfterEach(cc CleanupContext) {
 			}
 			if diff := cmp.Diff(cc.NodeCapacityAnnotations, capacitiesAfter); diff != "" {
 				return fmt.Errorf("capacities on nodes should be same before and after the test: diff=%q", diff)
-			}
-			csiCapacitiesAfter, err := getCSICapacity()
-			if err != nil {
-				return err
-			}
-
-			if diff := cmp.Diff(cc.CSICapacity, csiCapacitiesAfter); diff != "" {
-				return fmt.Errorf("csi capacity should be same before and after the test: diff=%q", diff)
 			}
 			return nil
 		}).Should(Succeed())
@@ -131,7 +120,7 @@ func getNodeAnnotationMapWithPrefix(prefix string) (map[string]map[string]string
 }
 
 func getCSICapacity() (map[string]*resource.Quantity, error) {
-	stdout, stderr, err := kubectl("get", "-n", "topolvm-system", "csistoragecapacities", "-o=json")
+	stdout, stderr, err := kubectl("get", "-n", "nativestor-system", "csistoragecapacities", "-o=json")
 	if err != nil {
 		return nil, fmt.Errorf("stdout=%sr stderr=%s, err=%v", stdout, stderr, err)
 	}

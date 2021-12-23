@@ -17,12 +17,19 @@ limitations under the License.
 package discovercmd
 
 import (
+	"context"
+	rawdevicev1 "github.com/alauda/nativestor/apis/rawdevice/v1"
+	rawclient "github.com/alauda/nativestor/generated/nativestore/rawdevice/clientset/versioned"
+	"github.com/alauda/nativestor/generated/nativestore/rawdevice/informers/externalversions"
+	"github.com/pkg/errors"
+	"os"
 	"time"
 
-	topolvmv2 "github.com/alauda/topolvm-operator/api/v2"
-	"github.com/alauda/topolvm-operator/cmd/topolvm"
-	"github.com/alauda/topolvm-operator/pkg/cluster"
-	opediscover "github.com/alauda/topolvm-operator/pkg/operator/discover"
+	topolvmv2 "github.com/alauda/nativestor/apis/topolvm/v2"
+	"github.com/alauda/nativestor/cmd/topolvm"
+	"github.com/alauda/nativestor/pkg/cluster"
+	topolvmcluster "github.com/alauda/nativestor/pkg/cluster/topolvm"
+	opediscover "github.com/alauda/nativestor/pkg/operator/discover"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,20 +46,49 @@ var DiscoverCmd = &cobra.Command{
 	Short: "discover available devices",
 }
 
+const (
+	ResyncPeriodOfRawDeviceInformer = 1 * time.Hour
+)
+
 func init() {
 	DiscoverCmd.Flags().DurationVar(&discoverDevicesInterval, "discover-interval", 60*time.Second, "interval between discovering devices (default 60m)")
 	utilruntime.Must(topolvmv2.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(rawdevicev1.AddToScheme(scheme))
 	DiscoverCmd.RunE = discover
 }
 
 func discover(cmd *cobra.Command, args []string) error {
-	context := cluster.NewContext()
-	err := opediscover.Run(context, discoverDevicesInterval)
+	ctx := cluster.NewContext()
+	clientset, err := rawclient.NewForConfig(ctx.KubeConfig)
+	if err != nil {
+		topolvm.TerminateOnError(err, "create raw device client set failed")
+		return err
+	}
+	nodeName := os.Getenv(topolvmcluster.NodeNameEnv)
+	namespace := os.Getenv(topolvmcluster.PodNameSpaceEnv)
+	if nodeName == "" || namespace == "" {
+		topolvm.TerminateOnError(errors.New("can not get node name and namespace"), "")
+	}
+
+	useLoop := false
+
+	if os.Getenv(topolvmcluster.UseLoopEnv) == topolvmcluster.UseLoop {
+		useLoop = true
+	} else {
+		useLoop = false
+	}
+	ctx.RawDeviceClientset = clientset
+	factory := externalversions.NewSharedInformerFactory(ctx.RawDeviceClientset, ResyncPeriodOfRawDeviceInformer)
+	rawDeviceLister := factory.Rawdevice().V1().RawDevices().Lister()
+	udevEventPeriod := time.Duration(5) * time.Second
+
+	deviceManager := opediscover.NewDeviceManager(ctx, udevEventPeriod, discoverDevicesInterval, rawDeviceLister, nodeName, namespace, useLoop)
+
+	factory.Start(context.TODO().Done())
+	err = deviceManager.Run()
 	if err != nil {
 		topolvm.TerminateFatal(err)
 	}
-
 	return nil
-
 }

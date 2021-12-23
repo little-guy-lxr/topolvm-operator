@@ -1,10 +1,14 @@
 CONTROLLER_TOOLS_VERSION=0.7.0
 KUSTOMIZE_VERSION=3.8.7
 
-TOPOLVM_OPERATOR_VERSION ?= devel
+NATIVE_STOR_VERSION ?= devel
 
 SUDO=sudo
 BINDIR := $(PWD)/bin
+CSI_VERSION=1.5.0
+PROTOC := PATH=$(BINDIR):$(PATH) $(BINDIR)/protoc -I=$(shell pwd)/include:.
+CURL=curl -Lsf
+PROTOC_VERSION=3.15.0
 CONTROLLER_GEN := $(BINDIR)/controller-gen
 STATICCHECK := $(BINDIR)/staticcheck
 INEFFASSIGN := $(BINDIR)/ineffassign
@@ -30,9 +34,9 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 REGISTRY_PREFIX ?= docker.io
 IMAGE_PREFIX ?= alaudapublic/
-IMAGE_TAG_BASE ?= $(IMAGE_PREFIX)topolvm-operator
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(TOPOLVM_OPERATOR_VERSION)
-IMAGE ?= $(REGISTRY_PREFIX)/$(IMAGE_TAG_BASE):$(TOPOLVM_OPERATOR_VERSION)
+IMAGE_TAG_BASE ?= $(IMAGE_PREFIX) nativestor
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(NATIVE_STOR_VERSION)
+IMAGE ?= $(REGISTRY_PREFIX)/$(IMAGE_TAG_BASE):$(NATIVE_STOR_VERSION)
 IMG ?= $(REGISTRY_PREFIX)/$(BUNDLE_IMG)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -44,6 +48,8 @@ GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+
+
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
@@ -75,11 +81,11 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) \
 		crd:crdVersions=v1 \
 		rbac:roleName=topolvm-global \
-		paths="./api/...;./controllers" \
+		paths="./apis/...;./pkg/operator/topolvm/controller" \
 		output:crd:artifacts:config=config/crd/bases
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./apis/..."
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
@@ -102,6 +108,9 @@ example: manifests generate ## Generate yaml manifests for operator deployment
 setup: tools controller-gen ## Install controller-tools.
 
 tools: ## Install tools required for testing.
+	curl -sfL -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v$(PROTOC_VERSION)/protoc-$(PROTOC_VERSION)-osx-x86_64.zip
+	unzip -o protoc.zip bin/protoc 'include/*'
+	rm -f protoc.zip
 	GOBIN=$(BINDIR) go install golang.org/x/tools/cmd/goimports@latest
 	GOBIN=$(BINDIR) go install honnef.co/go/tools/cmd/staticcheck@latest
 	GOBIN=$(BINDIR) go install github.com/gordonklaus/ineffassign@latest
@@ -109,8 +118,8 @@ tools: ## Install tools required for testing.
 
 ##@ Build
 
-build: fmt vet ## Build topolvm-operator binary.
-	go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/topolvm-operator/main.Version=$(TOPOLVM_OPERATOR_VERSION))"  main.go
+build: fmt vet ## Build  nativestor binary.
+	go build -o bin/topolvm -ldflags "-w -s -X github.com/alauda/nativestor/main.Version=$(NATIVE_STOR_VERSION))"  main.go
 
 run: manifests generate fmt vet ## Run a controller from your host (Not Applicable).
 	go run ./main.go
@@ -121,14 +130,14 @@ docker-build: test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
-image: ## Build docker image of topolvm-operator:devel.
-	docker build -t $(IMAGE_PREFIX)topolvm-operator:devel --build-arg TOPOLVM_OPERATOR_VERSION=$(TOPOLVM_OPERATOR_VERSION) .
+image: ## Build docker image of  nativestor:devel.
+	docker build -t $(IMAGE_PREFIX)nativestor:devel --build-arg NATIVE_STOR_VERSION=$(NATIVE_STOR_VERSION) .
 
-tag: ## Tag docker image of topolvm-operator:devel.
-	docker tag $(IMAGE_PREFIX)topolvm-operator:devel $(IMAGE_PREFIX)topolvm-operator:$(IMAGE_TAG)
+tag: ## Tag docker image of  nativestor:devel.
+	docker tag $(IMAGE_PREFIX) nativestor:devel $(IMAGE_PREFIX) nativestor:$(IMAGE_TAG)
 
-push: ## Push tagged docker image of topolvm-operator
-	docker push $(IMAGE_PREFIX)topolvm-operator:$(IMAGE_TAG)
+push: ## Push tagged docker image of  nativestor
+	docker push $(IMAGE_PREFIX) nativestor:$(IMAGE_TAG)
 
 ##@ Deployment
 
@@ -175,7 +184,7 @@ endef
 bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(TOPOLVM_OPERATOR_VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(NATIVE_STOR_VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 
 .PHONY: bundle-build
@@ -208,7 +217,7 @@ endif
 BUNDLE_IMGS ?= $(BUNDLE_IMG)
 
 # The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
-CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(TOPOLVM_OPERATOR_VERSION)
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(NATIVE_STOR_VERSION)
 
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
@@ -226,3 +235,24 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+build/raw-device:
+	mkdir -p build
+	go build -o $@  ./pkg/raw_device/raw_device
+
+.PHONY: csi.proto
+csi.proto:
+	$(CURL) -o $@ https://raw.githubusercontent.com/container-storage-interface/spec/v$(CSI_VERSION)/csi.proto
+	sed -i 's,^option go_package.*$$,option go_package = "github.com/alauda/nativestor/csi";,' csi.proto
+	sed -i '/^\/\/ Code generated by make;.*$$/d' csi.proto
+
+.PHONY: csi/csi.pb.go
+csi/csi.pb.go: csi.proto
+	mkdir -p csi
+	$(PROTOC) --go_out=module=github.com/alauda/nativestor:. $<
+
+.PHONY: csi/csi_grpc.pb.go
+csi/csi_grpc.pb.go: csi.proto
+	mkdir -p csi
+	$(PROTOC) --go-grpc_out=module=github.com/alauda/nativestor:. $<
+

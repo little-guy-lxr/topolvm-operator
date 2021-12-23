@@ -2,9 +2,9 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    app.kubernetes.io/name: topolvm-system
+    app.kubernetes.io/name: nativestor-system
     topolvm.cybozu.com/webhook: ignore
-  name: topolvm-system
+  name: nativestor-system
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -90,7 +90,90 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: rawdevices.nativestor.alauda.io
+spec:
+  group: nativestor.alauda.io
+  names:
+    kind: RawDevice
+    listKind: RawDeviceList
+    plural: rawdevices
+    singular: rawdevice
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: RawDevice is the Schema for the rawdevices API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RawDeviceSpec defines the desired state of RawDevice
+            properties:
+              available:
+                type: boolean
+              major:
+                format: int32
+                type: integer
+              minor:
+                format: int32
+                type: integer
+              nodeName:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file'
+                type: string
+              realPath:
+                type: string
+              size:
+                format: int64
+                type: integer
+              type:
+                type: string
+              uuid:
+                type: string
+            required:
+            - available
+            - major
+            - minor
+            - nodeName
+            - realPath
+            - size
+            - type
+            - uuid
+            type: object
+          status:
+            description: RawDeviceStatus defines the observed state of RawDevice
+            properties:
+              name:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run "make" to regenerate code after modifying this file'
+                type: string
+            required:
+            - name
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
   name: topolvmclusters.topolvm.cybozu.com
 spec:
@@ -235,6 +318,8 @@ spec:
                                   type: string
                               type: object
                             type: array
+                          message:
+                            type: string
                           state:
                             type: string
                           vgName:
@@ -282,6 +367,8 @@ spec:
                                   type: string
                               type: object
                             type: array
+                          message:
+                            type: string
                           state:
                             type: string
                           vgName:
@@ -315,32 +402,76 @@ status:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: topolvm-controller
-  namespace: topolvm-system
+  name: nativestor-discover
+  namespace: nativestor-system
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: topolvm-discover
-  namespace: topolvm-system
+  name: nativestor-operator
+  namespace: nativestor-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nativestor-preparevg
+  namespace: nativestor-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rawdevice-plugin
+  namespace: nativestor-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rawdevice-provisioner
+  namespace: nativestor-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: topolvm-controller
+  namespace: nativestor-system
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: topolvm-node
-  namespace: topolvm-system
+  namespace: nativestor-system
 ---
-apiVersion: v1
-kind: ServiceAccount
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
 metadata:
-  name: topolvm-operator
-  namespace: topolvm-system
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: topolvm-preparevg
-  namespace: topolvm-system
+  name: nativestor-preparevg
+spec:
+  allowPrivilegeEscalation: true
+  allowedHostPaths:
+  - pathPrefix: /dev/
+    readOnly: false
+  - pathPrefix: /run/udev
+    readOnly: false
+  - pathPrefix: /sys
+    readOnly: false
+  fsGroup:
+    rule: RunAsAny
+  hostIPC: true
+  hostNetwork: true
+  hostPID: true
+  privileged: true
+  readOnlyRootFilesystem: true
+  runAsUser:
+    rule: RunAsAny
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  volumes:
+  - configMap
+  - emptyDir
+  - secret
+  - hostPath
 ---
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
@@ -373,43 +504,64 @@ spec:
   - secret
   - hostPath
 ---
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
 metadata:
-  name: topolvm-preparevg
-spec:
-  allowPrivilegeEscalation: true
-  allowedHostPaths:
-  - pathPrefix: /dev/
-    readOnly: false
-  - pathPrefix: /run/udev
-    readOnly: false
-  - pathPrefix: /sys
-    readOnly: false
-  fsGroup:
-    rule: RunAsAny
-  hostIPC: true
-  hostNetwork: true
-  hostPID: true
-  privileged: true
-  readOnlyRootFilesystem: true
-  runAsUser:
-    rule: RunAsAny
-  seLinux:
-    rule: RunAsAny
-  supplementalGroups:
-    rule: RunAsAny
-  volumes:
-  - configMap
-  - emptyDir
-  - secret
-  - hostPath
+  name: nativestor-external-provisioner-cfg
+  namespace: nativestor-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - get
+  - watch
+  - list
+  - delete
+  - update
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - watch
+  - list
+  - delete
+  - update
+  - create
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - csistoragecapacities
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: topolvm-external-provisioner-cfg
-  namespace: topolvm-system
+  name: nativestor-external-resizer-cfg
+  namespace: nativestor-system
 rules:
 - apiGroups:
   - coordination.k8s.io
@@ -426,26 +578,8 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: topolvm-external-resizer-cfg
-  namespace: topolvm-system
-rules:
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - watch
-  - list
-  - delete
-  - update
-  - create
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: topolvm-leader-election
-  namespace: topolvm-system
+  name: nativestor-leader-election
+  namespace: nativestor-system
 rules:
 - apiGroups:
   - ""
@@ -477,46 +611,8 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: topolvm-leader-election-role
-  namespace: topolvm-system
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: topolvm-operator
-  namespace: topolvm-system
+  name: nativestor-operator
+  namespace: nativestor-system
 rules:
 - apiGroups:
   - coordination.k8s.io
@@ -574,8 +670,8 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: topolvm-preparevg
-  namespace: topolvm-system
+  name: nativestor-preparevg
+  namespace: nativestor-system
 rules:
 - apiGroups:
   - ""
@@ -591,9 +687,24 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: topolvm-lvmd
+  namespace: nativestor-system
+rules:
+- apiGroups:
+  - policy
+  resourceNames:
+  - topolvm-node
+  resources:
+  - podsecuritypolicies
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: topolvm-external-provisioner-runner
+  name: nativestor-external-provisioner-runner
 rules:
 - apiGroups:
   - ""
@@ -650,17 +761,10 @@ rules:
   - storage.k8s.io
   resources:
   - csinodes
-  - csidrivers
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - storage.k8s.io
-  resources:
-  - csistoragecapacities
-  verbs:
-  - '*'
 - apiGroups:
   - ""
   resources:
@@ -669,11 +773,19 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - volumeattachments
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: topolvm-external-resizer-runner
+  name: nativestor-external-resizer-runner
 rules:
 - apiGroups:
   - ""
@@ -683,7 +795,6 @@ rules:
   - get
   - list
   - watch
-  - update
   - patch
 - apiGroups:
   - ""
@@ -696,9 +807,16 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - persistentvolumeclaims/status
   verbs:
-  - update
   - patch
 - apiGroups:
   - ""
@@ -714,7 +832,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: topolvm-global
+  name: nativestor-global
 rules:
 - apiGroups:
   - policy
@@ -775,6 +893,19 @@ rules:
   - create
   - update
   - delete
+- apiGroups:
+  - nativestor.alauda.io
+  resources:
+  - rawdevices
+  - rawdevices/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
 - apiGroups:
   - storage.k8s.io
   resources:
@@ -858,52 +989,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: topolvm-node
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-  - patch
-- apiGroups:
-  - topolvm.cybozu.com
-  resources:
-  - logicalvolumes
-  - logicalvolumes/status
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - delete
-  - patch
-- apiGroups:
-  - storage.k8s.io
-  resources:
-  - csidrivers
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - policy
-  resourceNames:
-  - topolvm-node
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: topolvm-preparevg
+  name: nativestor-preparevg
 rules:
 - apiGroups:
   - policy
@@ -923,7 +1009,45 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: topolvm-system-controller
+  name: rawdevice-plugin
+rules:
+- apiGroups:
+  - nativestor.alauda.io
+  resources:
+  - rawdevices
+  - rawdevices/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rawdevice-provisioner
+rules:
+- apiGroups:
+  - nativestor.alauda.io
+  resources:
+  - rawdevices
+  - rawdevices/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topolvm-controller
 rules:
 - apiGroups:
   - policy
@@ -988,130 +1112,276 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topolvm-node
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - topolvm.cybozu.com
+  resources:
+  - logicalvolumes
+  - logicalvolumes/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
+- apiGroups:
+  - nativestor.alauda.io
+  resources:
+  - rawdevices
+  - rawdevices/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - csidrivers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy
+  resourceNames:
+  - topolvm-node
+  resources:
+  - podsecuritypolicies
+  verbs:
+  - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: topolvm-csi-provisioner-role-cfg
-  namespace: topolvm-system
+  name: nativestor-leader-election
+  namespace: nativestor-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
+  name: nativestor-leader-election
+subjects:
+- kind: ServiceAccount
+  name: topolvm-controller
+  namespace: nativestor-system
+- kind: ServiceAccount
+  name: topolvm-raw-device-provisioner
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nativestor-operator
+  namespace: nativestor-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nativestor-operator
+subjects:
+- kind: ServiceAccount
+  name: nativestor-operator
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nativestor-preparevg
+  namespace: nativestor-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nativestor-preparevg
+subjects:
+- kind: ServiceAccount
+  name: nativestor-preparevg
+  namespace: nativestor-system
+- kind: ServiceAccount
+  name: nativestor-discover
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rawdevice-external-provisioner-cfg
+  namespace: nativestor-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nativestor-external-provisioner-cfg
+subjects:
+- kind: ServiceAccount
+  name: rawdevice-provisioner
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
   name: topolvm-external-provisioner-cfg
-subjects:
-- kind: ServiceAccount
-  name: topolvm-controller
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: topolvm-csi-resizer-role-cfg
-  namespace: topolvm-system
+  namespace: nativestor-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: topolvm-external-resizer-cfg
+  name: nativestor-external-provisioner-cfg
 subjects:
 - kind: ServiceAccount
   name: topolvm-controller
-  namespace: topolvm-system
+  namespace: nativestor-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: topolvm-leader-election
-  namespace: topolvm-system
+  namespace: nativestor-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: topolvm-leader-election
+  name: nativestor-leader-election
 subjects:
 - kind: ServiceAccount
   name: topolvm-controller
-  namespace: topolvm-system
+  namespace: nativestor-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: topolvm-leader-election-rolebinding
-  namespace: topolvm-system
+  name: topolvm-lvmd
+  namespace: nativestor-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: topolvm-leader-election-role
+  name: topolvm-node
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: topolvm-operator
-  namespace: topolvm-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: topolvm-operator
-subjects:
-- kind: ServiceAccount
-  name: topolvm-operator
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: topolvm-preparevg
-  namespace: topolvm-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: topolvm-preparevg
-subjects:
-- kind: ServiceAccount
-  name: topolvm-preparevg
-  namespace: topolvm-system
-- kind: ServiceAccount
-  name: topolvm-discover
-  namespace: topolvm-system
+  name: topolvm-node
+  namespace: nativestor-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: topolvm-csi-resizer-role
+  name: nativestor-global
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
+  name: nativestor-global
+subjects:
+- kind: ServiceAccount
+  name: nativestor-operator
+  namespace: nativestor-system
+- kind: ServiceAccount
+  name: nativestor-discover
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nativestor-preparevg
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nativestor-preparevg
+subjects:
+- kind: ServiceAccount
+  name: nativestor-preparevg
+  namespace: nativestor-system
+- kind: ServiceAccount
+  name: nativestor-discover
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rawdevice-external-provisioner-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nativestor-external-provisioner-runner
+subjects:
+- kind: ServiceAccount
+  name: rawdevice-provisioner
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rawdevice-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rawdevice-plugin
+subjects:
+- kind: ServiceAccount
+  name: rawdevice-plugin
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rawdevice-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rawdevice-provisioner
+subjects:
+- kind: ServiceAccount
+  name: rawdevice-provisioner
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topolvm-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: topolvm-controller
+subjects:
+- kind: ServiceAccount
+  name: topolvm-controller
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topolvm-external-provisioner-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nativestor-external-provisioner-runner
+subjects:
+- kind: ServiceAccount
+  name: topolvm-controller
+  namespace: nativestor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
   name: topolvm-external-resizer-runner
-subjects:
-- kind: ServiceAccount
-  name: topolvm-controller
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: topolvm-external-provisioner-runner
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: topolvm-external-provisioner-runner
+  name: nativestor-external-resizer-runner
 subjects:
 - kind: ServiceAccount
   name: topolvm-controller
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: topolvm-global
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: topolvm-global
-subjects:
-- kind: ServiceAccount
-  name: topolvm-operator
-  namespace: topolvm-system
+  namespace: nativestor-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1124,36 +1394,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: topolvm-node
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: topolvm-preparevg
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: topolvm-preparevg
-subjects:
-- kind: ServiceAccount
-  name: topolvm-preparevg
-  namespace: topolvm-system
-- kind: ServiceAccount
-  name: topolvm-discover
-  namespace: topolvm-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: topolvm-system-controller
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: topolvm-system-controller
-subjects:
-- kind: ServiceAccount
-  name: topolvm-controller
-  namespace: topolvm-system
+  namespace: nativestor-system
 ---
 apiVersion: v1
 data:
@@ -1171,16 +1412,16 @@ data:
       resourceName: c6b32c27.cybozu.com
 kind: ConfigMap
 metadata:
-  name: topolvm-manager-config
-  namespace: topolvm-system
+  name: manager-config
+  namespace: nativestor-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     app.kubernetes.io/compose: metrics
-  name: topolvm-cluster-metric
-  namespace: topolvm-system
+  name: nativestor-cluster-metric
+  namespace: nativestor-system
 spec:
   ports:
   - name: metrics
@@ -1190,42 +1431,13 @@ spec:
   selector:
     name: topolvm-operator
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: topolvm-controller
-  namespace: topolvm-system
-spec:
-  ports:
-  - port: 443
-    protocol: TCP
-    targetPort: 8443
-  selector:
-    app.kubernetes.io/name: topolvm-controller
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app.kubernetes.io/compose: metrics
-  name: topolvm-node-metric
-  namespace: topolvm-system
-spec:
-  ports:
-  - name: metrics
-    port: 8080
-    protocol: TCP
-    targetPort: 8080
-  selector:
-    app.kubernetes.io/compose: node
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
     operator: topolvm
-  name: topolvm-operator
-  namespace: topolvm-system
+  name: nativestor
+  namespace: nativestor-system
 spec:
   replicas: 1
   selector:
@@ -1254,9 +1466,9 @@ spec:
               fieldPath: metadata.namespace
         - name: IS_OPERATOR_HUB
           value: "0"
-        image: docker.io/alaudapublic/topolvm-operator:2.3.0
-        name: topolvm-operator
-      serviceAccountName: topolvm-operator
+        image: docker.io/alaudapublic/nativestor:2.4.0
+        name: nativestor-operator
+      serviceAccountName: nativestor-operator
 ---
 allowHostDirVolumePlugin: true
 allowHostIPC: true
@@ -1282,24 +1494,11 @@ seLinuxContext:
 supplementalGroups:
   type: RunAsAny
 users:
-- system:serviceaccount:topolvm-system:topolvm-node
-- system:serviceaccount:topolvm-system:topolvm-discover
-- system:serviceaccount:topolvm-system:topolvm-preparevg
+- system:serviceaccount:nativestor-system:topolvm-node
+- system:serviceaccount:nativestor-system:topolvm-discover
+- system:serviceaccount:nativestor-system:topolvm-preparevg
 volumes:
 - configMap
 - emptyDir
 - hostPath
 - secret
----
-apiVersion: storage.k8s.io/v1
-kind: CSIDriver
-metadata:
-  name: topolvm-topolvm.cybozu.com
-  namespace: topolvm-system
-spec:
-  attachRequired: false
-  podInfoOnMount: true
-  storageCapacity: true
-  volumeLifecycleModes:
-  - Persistent
-  - Ephemeral
